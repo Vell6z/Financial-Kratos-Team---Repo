@@ -1,0 +1,83 @@
+# ---------------------------------------------
+# .gitignore general — Financial Kratos Team
+# ---------------------------------------------
+
+# === Variables de entorno y secretos ===
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets.*
+
+
+# === Dependencias ===
+node_modules/
+bower_components/
+jspm_packages/
+vendor/
+
+# === Logs ===
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# === Builds / salidas ===
+dist/
+build/
+out/
+.next/
+.nuxt/
+.cache/
+.parcel-cache/
+coverage/
+*.tsbuildinfo
+
+# === Node / JS / package managers ===
+.npm
+.yarn/
+.pnp.*
+.eslintcache
+
+# === Python ===
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# === Java / JVM ===
+*.class
+target/
+*.jar
+*.war
+*.ear
+.gradle/
+
+# === Bases de datos locales ===
+*.sqlite
+*.sqlite3
+*.db
+
+# === Editores / IDEs ===
+.vscode/
+.idea/
+*.swp
+*.swo
+*.sublime-project
+*.sublime-workspace
+
+# === Sistema operativo ===
+.DS_Store
+Thumbs.db
+desktop.ini
+*~
