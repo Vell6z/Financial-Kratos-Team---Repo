@@ -1,139 +1,272 @@
-# La Bodeguita — MVP hackathon Interledger
+<p align="center">
+  <img src="public/favicon-48.png" alt="Logo de La Bodeguita" width="64" height="64" />
+</p>
 
-Plataforma colombiana que capta inversión extranjera por **Interledger (Open Payments)** para prestarle a personas no
-bancarizadas. El dinero se desembolsa y se recauda en pesos por **Bre-B**, y cada crédito pagado a tiempo construye historial.
+<h1 align="center">La Bodeguita</h1>
 
+<p align="center">
+  Crédito justo para personas no bancarizadas en Colombia, financiado con inversión que llega por <b>Interledger</b>.<br />
+  MVP de hackathon del equipo <b>Financial Kratos</b>.
+</p>
+
+---
+
+## ¿Por qué existe?
+
+En Colombia millones de personas no tienen historial bancario. Cuando necesitan plata para su negocio terminan en el
+**gota a gota**: préstamos informales con intereses de más del 20 % mensual y cobros violentos.
+
+La Bodeguita propone otra salida:
+
+- **Inversionistas** (de Colombia o del exterior) ponen su dinero en una **cajita** por nivel de riesgo y reciben una
+  rentabilidad esperada. El dinero entra y sale por **Open Payments (Interledger)**, en la moneda de su wallet.
+- Con ese capital se dan **microcréditos productivos** a personas sin historial. Se aprueban con un **estudio de crédito
+  propio** (datos alternativos + Machine Learning), no con centrales de riesgo.
+- El crédito se desembolsa y se paga en pesos por **Bre-B**, el sistema de pagos inmediatos de Colombia.
+- Pagar a tiempo **sube de nivel**: mejores condiciones en el siguiente crédito y un historial que antes no existía.
+
+> Todo corre en sandbox y en la red de prueba de Interledger: **nunca se mueve dinero real**.
+
+## Cómo funciona
+
+```mermaid
+flowchart LR
+    subgraph INV["Inversionista"]
+        W["Wallet Interledger<br/>(USD, EUR, MXN...)"]
+    end
+
+    subgraph PLAT["La Bodeguita"]
+        V["Bóveda<br/>(wallet de la plataforma)"]
+        P1["Pool Nivel 1"]
+        P2["Pool Nivel 2"]
+        P3["Pool Nivel 3"]
+        E["Estudio de crédito<br/>reglas + ML"]
+    end
+
+    subgraph ACR["Acreditado"]
+        R["Registro con<br/>verificación facial"]
+        B["Cuenta con<br/>llave Bre-B"]
+    end
+
+    W -- "1. Invierte<br/>Open Payments" --> V
+    V --> P1 & P2 & P3
+    R -- "2. Hace el estudio" --> E
+    E -- "Nivel 1, 2 o 3" --> P1 & P2 & P3
+    P1 & P2 & P3 -- "3. Desembolso<br/>Bre-B" --> B
+    B -- "4. Cuotas cada 15 días<br/>Bre-B" --> V
+    V -- "5. Retiro capital + rendimiento<br/>Open Payments" --> W
 ```
-Inversionista ──Interledger──▶ Bóveda (cajita por nivel) ──Bre-B──▶ Crédito al solicitante
-      ▲                                                                   │
-      └──── retiro capital + rendimiento (Interledger) ◀── cuotas cada 15 días por Bre-B
+
+### La inversión, paso a paso (Open Payments)
+
+```mermaid
+sequenceDiagram
+    actor I as Inversionista
+    participant A as La Bodeguita
+    participant WI as Wallet del inversionista
+    participant WB as Wallet de la bóveda
+
+    I->>A: Elige nivel y monto en pesos
+    A->>WB: Crea un incoming payment
+    A->>WI: Pide la cotización (aquí Interledger convierte de moneda)
+    A->>WI: Pide permiso para el pago saliente (grant interactivo)
+    A-->>I: Muestra la cotización y el botón "Aprobar en mi wallet"
+    I->>WI: Aprueba el pago
+    WI-->>A: Vuelve con interact_ref + hash (se verifica)
+    A->>WI: Crea el outgoing payment
+    A->>WB: Confirma cuánto llegó y cierra el incoming payment
+    A-->>I: La cajita empieza a rentar
+```
+
+**Retiros:** el operador aprueba **una sola vez** en `/boveda` un permiso de pagos salientes de la bóveda, con un tope total.
+Desde ahí cada retiro sale solo hacia la wallet del inversionista, sin que nadie lo apruebe. Interledger convierte a la moneda de
+esa wallet.
+
+### El crédito, paso a paso
+
+```mermaid
+flowchart TD
+    A["Registro<br/>datos, documento y verificación facial"] --> B["Estudio de crédito en 6 pasos"]
+    B --> C{"¿Puntaje y modelo ML?"}
+    C -- "Nivel 4" --> D["No apto por ahora<br/>razones y fecha para reintentar"]
+    C -- "Nivel 1, 2 o 3" --> E["Elige monto, cuotas y destino<br/>(crédito productivo)"]
+    E --> F["Verifica su llave Bre-B<br/>y confirma el titular"]
+    F --> G["Acepta contrato y pagaré"]
+    G --> H{"¿El pool tiene capital<br/>respetando el encaje del 15 %?"}
+    H -- "No" --> I["En espera de fondeo"]
+    I --> H
+    H -- "Sí" --> J["Se re-verifica la llave<br/>y se desembolsa por Bre-B"]
+    J --> K["Paga cuotas cada 15 días<br/>(3 días de gracia)"]
+    K --> L{"¿Peor atraso?"}
+    L -- "A tiempo" --> M["Sube de nivel<br/>+ paz y salvo"]
+    L -- "Con atrasos" --> N["Se mantiene o baja de nivel"]
+    L -- "90 días o más" --> O["Reporte simulado a centrales<br/>y bloqueo de 12 meses"]
 ```
 
 ## Qué es real y qué es simulado
 
 | Parte | Estado |
 |---|---|
-| Inversión y retiro del inversionista | **Real** con Open Payments en la red de prueba (simulado si no hay llaves) |
-| Tasa de cambio moneda del inversionista → bóveda | **Real**: la define la cotización de Interledger |
-| Conversión pesos → moneda de la bóveda | **Tasa de mercado** (open.er-api.com, `src/lib/fx.ts`); `OP_COP_PER_UNIT` la fija a mano |
-| Verificación de la llave Bre-B (titular y banco) | **Real** con el directorio Bre-B de Wompi (sandbox; simulado si no hay llaves) |
-| Desembolso (payout) por Bre-B | **Simulado con datos reales**: justo antes de pagar, la llave se re-verifica en el directorio Bre-B de producción (solo lectura) y se arma el payout exacto para Wompi (referencia e idempotency key = id del crédito, monto en centavos), pero **no se envía**. Ver `src/lib/payouts.ts` |
-| Lectura de documentos del estudio | **IA (Gemini)** con `GEMINI_API_KEY`: tipo de documento, ingreso del extracto, mora en la factura y señales de alteración (`src/lib/doc-reader.ts`). Sin llave, trucos en el nombre del archivo |
-| Pago de cuotas por Bre-B | **Simulador de banco** en `/mi-credito`: el acreditado transfiere (completo o abono parcial) a la llave `@labodeguita`, vinculada a la bóveda; el dinero entra al pool del nivel (`VAULT_BREB` en `src/lib/config.ts`) |
-| Estudio de crédito, niveles, cuotas, fondeo | Funcional |
+| Inversión, retiro e inversión recurrente | **Real** con Open Payments en la red de prueba (simulado si no hay llaves) |
+| Conversión entre la moneda del inversionista y la de la bóveda | **Real**: la define la cotización de Interledger |
+| Conversión pesos → moneda de la bóveda | Tasa de mercado (open.er-api.com). `OP_COP_PER_UNIT` la fija a mano |
+| Verificación de la llave Bre-B (titular y banco) | **Real** con el directorio Bre-B de Wompi, solo lectura (simulado si no hay llaves) |
+| Desembolso por Bre-B | **Simulado con datos reales**: se arma el payout exacto para Wompi, pero no se envía |
+| Pago de cuotas por Bre-B | Simulador de banco en `/mi-credito` |
+| Lectura de documentos del estudio | IA (Gemini) con `GEMINI_API_KEY`; sin llave, trucos en el nombre del archivo |
+| Verificación facial | **Local y gratuita**: prueba de vida (girar la cabeza) con MediaPipe y detección de rostros duplicados. No es de grado bancario |
+| Contrato, pagaré y reporte a centrales de riesgo | Simulados |
 
-## Reglas de negocio (`src/lib/config.ts`)
+## Reglas de negocio
 
-| Nivel | Riesgo | Tasa del acreditado (E.A.) | Rentabilidad esperada del inversionista | Monto máx. | Plazo |
+Todo vive en [`src/lib/config.ts`](src/lib/config.ts).
+
+| Nivel | Riesgo | Tasa del acreditado (E.A.) | Rentabilidad esperada del inversionista | Monto máximo | Plazo del crédito |
 |---|---|---|---|---|---|
 | 1 | Bajo | 24 % | 15,3 % | $5.000.000 | 30–365 días |
 | 2 | Medio | 30 % | 17,9 % | $3.000.000 | 30–150 días |
 | 3 | Alto | 36 % | 19,6 % | $1.000.000 | 30–90 días |
 
-- **Inversión tipo "cajita"**: el inversionista elige un nivel y su saldo crece con interés compuesto a la tasa del nivel.
-- **Retiros**: cada aporte dura **un año** desde que se hace, en cualquier nivel.
-  Puede sacar todo lo de los aportes que cumplieron su plazo y hasta el **50 %** de cada aporte que sigue en plazo (sumando lo
-  que ya sacó de él). Los retiros salen primero de los aportes vencidos, del más antiguo al más nuevo.
-  Máximo **US$30.000 por retiro**, pasado a pesos con la tasa de mercado del dólar. Siempre sujeto a la liquidez del pool.
-- **Inversión recurrente**: antes de invertir se puede elegir "Repetir cada mes". En la wallet se aprueba una sola vez un
-  permiso de Open Payments con intervalo (el mismo monto, en la moneda de la wallet, cada mes); cada cobro entra a la cajita
-  como un aporte nuevo. Se cancela desde `/invertir` (se revoca el permiso). `OP_RECURRING_INTERVAL` cambia la frecuencia.
-- **Rentabilidad esperada del inversionista**: 15,3 % / 17,9 % / 19,6 % E.A. (no garantizada). 15 % de cada pool es encaje.
-- **Mora y nivel**: solicitud de pago con 3 días para pagar; el peor atraso decide el nivel del siguiente crédito; aviso a los 70 días
-  y reporte **simulado** a centrales de riesgo a los 90 (ver `docs/reglas-cambio-de-nivel.md` y `docs/modelo-de-riesgo.md`).
-- **Capital semilla**: 50 M COP repartidos 20 / 17 / 13 M entre los pools (supuesto).
-- **Créditos**: mínimo 2 cuotas, una cada 15 días contados desde el desembolso, con cuota fija (sistema francés). Si el pool no tiene fondos el crédito queda **en espera de fondeo** y se desembolsa cuando entra dinero.
-- **Estudio de crédito** (`/estudio`): obligatorio para el acreditado antes de usar la app. 6 pasos; el servidor calcula un puntaje 0–100 con factor de confianza (declarado ×0,5, documento ×0,8, confirmado ×1), cruces de coherencia y exclusiones, y asigna nivel 1, 2, 3 o 4 (no apto, reintento en 60 días). Explicación completa en [`docs/modelo-de-riesgo.md`](docs/modelo-de-riesgo.md).
-- **Machine Learning** (`ml/`): dataset sintético de 6.000 solicitudes con su historial de pago y un modelo base que compara ML vs. el cuestionario. Ver [`ml/README.md`](ml/README.md).
-- **Cupo**: el menor entre el techo del nivel y lo que alcanza a pagar con una cuota cada 15 días de máximo el 50 % de su dinero libre.
-- **Subir de nivel**: cada crédito pagado completo y sin atrasos sube un nivel.
-- **Pendiente de definir**: comisión operativa, seguro contra impago y reserva (`FEES`, hoy en 0).
+- **Rentabilidad del inversionista** = 85 % prestado × (tasa del acreditado − reserva para impagos − comisión de 3 puntos).
+  Es **esperada, no garantizada**.
+- **Encaje del 15 %**: cada pool presta como máximo el 85 % de su capital. El resto queda para los retiros.
+- **Inversión mínima**: $100.000. Cada aporte dura **un año**. Antes de cumplirlo se puede retirar hasta el **50 %** del aporte.
+  Máximo US$30.000 por retiro.
+- **Crédito**: mínimo 2 cuotas, una cada 15 días desde el desembolso, cuota fija (sistema francés). El cupo es el menor entre el
+  techo del nivel y lo que alcanza a pagar con el 50 % de su dinero libre.
+- **Mora y nivel**: cada cuota tiene 3 días para pagarse. El peor atraso del último crédito decide el nivel del siguiente. Aviso a
+  los 70 días y reporte simulado a los 90 ([`docs/reglas-cambio-de-nivel.md`](docs/reglas-cambio-de-nivel.md)).
+- **Estudio de crédito**: puntaje de 0 a 100 con factor de confianza (lo declarado vale menos que lo respaldado con un documento o
+  una referencia) y un modelo de regresión logística que ajusta el nivel ±1
+  ([`docs/modelo-de-riesgo.md`](docs/modelo-de-riesgo.md), [`ml/README.md`](ml/README.md)).
 
-## Registro (`/registro`)
+## Correr el proyecto
 
-Formulario por pasos:
-1. **Datos personales**: nombre, apellido, correo, cédula/documento, celular, nacionalidad, edad (18+), sexo, dirección y rol (**inversionista** o **acreditado**).
-2. **Perfil**
-   - Inversionista: wallet address de Interledger, ingreso mensual promedio y moneda, origen de ingresos, independiente/asalariado.
-   - Acreditado: fuente de ingresos, ingreso mensual (COP), ¿acepta pagos por Bre-B? (si responde que no, no puede continuar hasta crear una llave) y llave Bre-B.
-3. **Documentos**: copia del documento por ambos lados (JPG/PNG/WEBP/PDF, máx. 5 MB) y verificación facial (*próximamente*).
-4. **Contraseña** y confirmación.
+### Requisitos
 
-Las copias del documento se guardan en `data/uploads/<id>/` (fuera de `public/`, no quedan expuestas) y las contraseñas con scrypt.
-Cada rol ve solo sus pantallas y las API validan el rol.
+- **Node.js 20.9 o superior** y npm.
+- Opcional: Python 3 para reentrenar el modelo de ML.
 
-## Correr en local
+### Arrancar
 
 ```bash
 npm install
 npm run dev
 ```
 
-Abre http://localhost:3000. Sin `.env.local` todo funciona en **modo simulado**.
+Abre http://localhost:3000. **Sin `.env` todo funciona en modo simulado**: puedes recorrer la app completa sin ninguna llave.
+
+| Comando | Para qué |
+|---|---|
+| `npm run dev` | Servidor de desarrollo en http://localhost:3000 |
+| `npm run dev:https` | Igual, con HTTPS y abierto a la red local. Sirve para probar la cámara desde el celular |
+| `npm run build` | Compila y revisa los tipos (debe pasar antes de cada commit) |
+| `npm run lint` | Lint |
+| `npm run ml:dataset` | Regenera el dataset sintético de `ml/dataset/` |
+| `python3 ml/train_baseline.py` | Reentrena el modelo y escribe `ml/modelo/regresion_logistica.json` |
 
 ### Cuentas demo
 
-Se crean tres cuentas de prueba: un **inversionista**, un **acreditado** y un **operador**.
-Los usuarios solo ven sus propios datos (inicio, inversiones o crédito, y *Movimientos*); la **bóveda** (liquidez de los pools,
-cartera y movimientos de todos) y los controles de demo son exclusivos del operador.
-Los correos y contraseñas están en [`src/lib/demo-accounts.ts`](src/lib/demo-accounts.ts). Para recrearlas, borra la carpeta `data/`
-(el botón *Reiniciar demo* de la bóveda conserva las cuentas).
+Al arrancar se crean tres cuentas: **inversionista**, **acreditado** y **operador**. Sus correos y contraseñas están en
+[`src/lib/demo-accounts.ts`](src/lib/demo-accounts.ts).
 
-### Conectar Open Payments (red de prueba)
+Ya vienen con datos para mostrar todo sin esperar:
 
-1. Crea una cuenta en https://wallet.interledger-test.dev y una wallet address para la **bóveda**.
-2. En *Settings → Developer Keys* genera llaves: copia el **Key ID** y descarga `private.key` a la raíz del proyecto.
-3. `cp .env.example .env` y completa `OP_PLATFORM_WALLET_ADDRESS`, `OP_KEY_ID`, `OP_PRIVATE_KEY_PATH` y `OP_VAULT_WALLET_ADDRESS` (la bóveda que recibe las inversiones).
-4. Crea otra cuenta (o wallet address) para el **inversionista** y fóndeala con dinero de prueba. Para usarla con la cuenta demo, ponla en `OP_DEMO_INVESTOR_WALLET` y borra `data/`.
-5. Reinicia `npm run dev`. En `/boveda` debe aparecer "Open Payments conectado".
+- El inversionista tiene cajitas con aportes vencidos y en plazo, y un retiro hecho.
+- El acreditado tiene el estudio hecho, un crédito **pagado** (con paz y salvo, que lo subió de nivel) y un crédito **activo**
+  con una cuota por pagar.
 
-Flujo de inversión: incoming payment en la bóveda → quote en la wallet del inversionista → grant interactivo → el
-inversionista aprueba en su wallet → callback `/api/op/finish/[id]` → outgoing payment → se acredita la cajita.
-**Retiros (la plata sale de la bóveda):** en `/boveda` el operador pulsa *Autorizar retiros automáticos* y aprueba UNA vez,
-en la wallet de la bóveda, un permiso de pagos salientes con tope total (`OP_VAULT_GRANT_LIMIT_USD` en dólares, o `OP_VAULT_GRANT_LIMIT`, por defecto 1000 en la moneda
-de la bóveda). Desde ahí cada retiro sale solo: se reserva el saldo de la cajita → incoming payment en la wallet del
-inversionista → quote en la bóveda → outgoing payment con el token guardado (se rota si vence). Si el envío falla, el saldo
-vuelve a la cajita; si el permiso ya no sirve, se borra y el panel pide renovarlo. Sin permiso, cada retiro lo aprueba el
-operador en la wallet de la bóveda.
-Al volver de la wallet se verifica el `hash` de la interacción (GNAP) y se espera a que el pago saliente se liquide antes de acreditar.
+El operador entra a `/boveda`: liquidez de los pools, cartera, permiso de retiros, revisión de verificaciones faciales y los
+controles de demo. **Reiniciar demo** borra inversiones, créditos y movimientos, y vuelve a cargar los datos demo con la fecha de
+hoy (conserva las cuentas y el permiso de la bóveda). **+15 días / +1 año** adelanta el reloj para ver crecer las cajitas y vencer
+cuotas.
 
-### Verificar llaves Bre-B (Wompi)
+### Probar desde el celular (cámara)
 
-Antes de desembolsar, `/credito` consulta la llave en el directorio Bre-B (`src/lib/breb.ts`, solo lectura) y muestra titular
-enmascarado y banco para que el acreditado confirme. El crédito usa la llave **guardada en el servidor** al verificar
-(vale 5 minutos, solo para quien la verificó y una sola vez): no se puede cambiar después.
-Estados del desembolso: `CREDIT_APPROVED → BREB_KEY_VERIFIED → USER_CONFIRMED_BENEFICIARY → TREASURY_DEBITED → PAYOUT_SUBMITTED → DISBURSED`.
-Al reservar el capital (`TREASURY_DEBITED`) la llave se vuelve a consultar: si ya no existe, está inactiva o cambió de titular o
-banco, pasa a `BREB_KEY_REJECTED`, el capital vuelve al pool y el crédito queda `cancelado` (el acreditado puede pedirlo de nuevo).
-Si el directorio no responde, el crédito queda reservado y se reintenta; nunca se paga con un resultado incierto.
-El sandbox solo reconoce `@elias123`, `1020304050`, `3001234567`, `ecolon@wompi.com` y `B00012345`.
+La cámara solo funciona con HTTPS o en `localhost`. Para el celular:
 
-**QR Bre-B** (`src/lib/breb-qr.ts` + `src/components/breb-qr-scanner.tsx`): en `/credito`, *Escanear QR Bre-B* lee el QR de cobro
-del banco con la cámara (necesita https o localhost) o desde una foto (`jsqr`). El lector EMVCo falla cerrado: exige el CRC
-(CRC-16/CCITT-FALSE) como último campo, una sola plantilla de llave con namespace `CO.COM.RBM.LLA` (tags 26–51; también
-acepta `CO.COM.RBM` a secas) y una sola llave (.01 documento, .02 celular, .03 correo, .04 alias). Las demás plantillas
-`CO.COM.RBM.*` de los QR reales (RED, CU, CA, CANAL, IVA, TRXID, SEC…) no traen la llave y se ignoran. Probado con QR reales. Un QR válido no prueba que la llave exista: después se consulta el
-directorio Bre-B y el usuario confirma el titular, que sale del directorio y no del QR. El monto del QR se ignora.
+1. `npm run dev:https`. La primera vez pide la contraseña de sudo para crear el certificado local.
+2. Con el celular en la misma red wifi, abre `https://<IP de tu computador>:3000`.
+3. Acepta la advertencia del certificado ("Avanzado → Continuar"): es tu propio servidor.
 
-## Guion de demo (≈3 min)
+## Conectar las integraciones
 
-1. **Invertir** con la wallet del inversionista en Nivel 3 → aprobar en la wallet de prueba → la cajita aparece.
-2. **Pedir crédito**: llenar el estudio → aprobado con nivel → elegir monto y cuotas → llave Bre-B → desembolso.
-3. **Bóveda**: ver el movimiento de inversión (Interledger) y el desembolso (Bre-B).
-4. **Mi crédito** → *Pagar deuda* → confirmar la transferencia Bre-B simulada.
-5. **Bóveda** → *+1 año* → volver a **Invertir** y ver el rendimiento → **retirar** a la wallet por Interledger.
+Copia `cp .env.example .env` y completa lo que quieras activar. Cada integración que falte se simula.
+
+### Open Payments (red de prueba de Interledger)
+
+1. Crea una cuenta en https://wallet.interledger-test.dev.
+2. Crea tres direcciones de pago **distintas**:
+   - **Plataforma**: firma las peticiones. En *Settings → Developer Keys* genera una llave, copia el **Key ID** y guarda
+     `private.key` en `secrets/`.
+   - **Bóveda**: recibe las inversiones y paga los retiros. Fondéala con dinero de prueba.
+   - **Inversionista de prueba**: desde donde se invierte. Debe ser **otra** wallet: la bóveda no puede pagarse a sí misma.
+3. En `.env`: `OP_PLATFORM_WALLET_ADDRESS`, `OP_KEY_ID`, `OP_PRIVATE_KEY_PATH`, `OP_VAULT_WALLET_ADDRESS` y, para la cuenta demo,
+   `OP_DEMO_INVESTOR_WALLET`.
+4. Reinicia el servidor. En `/boveda` debe decir **"Open Payments conectado"**.
+5. En `/boveda`, **Autorizar retiros automáticos** y apruébalo en la wallet de la bóveda. Solo hay que repetirlo si cambias la
+   bóveda, borras `data/`, revocas el permiso o se gasta su tope (`OP_VAULT_GRANT_LIMIT_USD`).
+
+El inversionista puede cambiar su wallet desde `/invertir` con **Guardar esta wallet**: sus cajitas pasan a la nueva.
+
+Para ver la inversión recurrente sin esperar un mes: `OP_RECURRING_INTERVAL=PT5M`.
+
+### Bre-B (Wompi)
+
+Con credenciales del sandbox de Wompi, la llave Bre-B se verifica de verdad antes de desembolsar. El sandbox solo reconoce
+`@elias123`, `1020304050`, `3001234567`, `ecolon@wompi.com` y `B00012345`. `WOMPI_RESOLVE_ENV=production` consulta el directorio
+real (solo lectura); los payouts nunca se envían.
+
+### Gemini y verificación facial
+
+- `GEMINI_API_KEY`: lee los documentos del estudio con IA.
+- `FACE_DESCRIPTOR_SECRET`: clave para cifrar los descriptores faciales. Define una propia fuera de la demo.
+
+## Guion de demo (≈ 4 min)
+
+1. **Invertir**: entra como inversionista, elige Nivel 3 y un monto, y aprueba en la wallet de prueba. La cajita aparece y
+   empieza a rentar.
+2. **Retirar**: retira una parte. Sale de la bóveda sin pedir aprobación y llega en la moneda de la wallet del inversionista.
+3. **Acreditado**: muestra el estudio hecho, el crédito pagado con su paz y salvo y el nivel que subió, y el crédito activo con la
+   cuota por pagar. Paga la cuota con el simulador Bre-B.
+4. **Pedir crédito**: con un acreditado sin crédito vigente, elige monto, cuotas y destino, verifica la llave Bre-B, acepta el
+   contrato y se desembolsa.
+5. **Bóveda**: el operador ve la inversión (Interledger), el desembolso y el pago (Bre-B) en los movimientos. **+1 año** muestra
+   el rendimiento acumulado.
+
+Antes de presentar: **Reiniciar demo** en `/boveda` (deja la cuota por pagar con la fecha del día) y revisa que la bóveda diga
+**"Autorizada"**.
 
 ## Estructura
 
 ```
-src/lib/config.ts        reglas de negocio (niveles, tasas, semilla, comisiones)
-src/lib/scoring.ts       estudio de crédito: preguntas, validación y puntaje
-src/lib/registration.ts  pasos y validaciones del registro
-src/lib/auth.ts          cuentas, contraseñas y sesiones
-src/lib/finance.ts       interés compuesto y tabla de amortización
-src/lib/services.ts      cajitas, créditos, fondeo, pagos
-src/lib/openpayments.ts  integración Open Payments
-src/lib/db.ts            persistencia en data/db.json (solo demo)
-src/app/api/*            endpoints
-src/app/{registro,login,inicio,estudio,invertir,credito,mi-credito,movimientos,boveda}  pantallas
+src/
+  app/                       pantallas y API (Next.js App Router)
+    registro, login          cuenta nueva con verificación facial
+    estudio, credito,        acreditado: estudio, pedir crédito, pagar cuotas
+      mi-credito
+    invertir                 inversionista: cajitas, retiros, inversión recurrente
+    boveda                   operador: pools, permiso de la bóveda, revisión facial, reloj
+    api/                     endpoints
+  lib/
+    config.ts                reglas de negocio (niveles, tasas, encaje, plazos)
+    services.ts              cajitas, créditos, fondeo y pagos
+    scoring.ts, riesgo-ml.ts estudio de crédito y modelo de ML
+    credit-history.ts        mora, cambio de nivel y reporte simulado
+    openpayments.ts          integración Open Payments
+    breb.ts, payouts.ts      Bre-B: verificación de llaves y desembolso
+    faceverify.ts            verificación facial (servidor)
+    db.ts                    persistencia en data/db.json (solo demo)
+    demo-*.ts                cuentas y datos precargados de la demo
+docs/                        modelo de riesgo, cambio de nivel, verificación facial
+ml/                          dataset sintético y entrenamiento del modelo
 ```
+
+Stack: Next.js 16, React 19, TypeScript, Tailwind CSS 4 y `@interledger/open-payments`. La base de datos es un archivo JSON
+(`data/db.json`, ignorado por git): borrar `data/` reinicia todo.
+
+## Aviso
+
+Es un prototipo de hackathon. Captar dinero del público y prestarlo es una actividad vigilada en Colombia (Superintendencia
+Financiera). Antes de operar con dinero real hace falta la figura legal correspondiente, un proveedor de verificación de identidad
+de grado bancario y revisar el tope de usura vigente.
