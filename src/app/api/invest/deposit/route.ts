@@ -1,6 +1,7 @@
 import { handle, parseLevel } from "@/lib/api";
 import { requireRole, requireUser, requireVerifiedIdentity } from "@/lib/auth";
 import { withDB, newId, now } from "@/lib/db";
+import { publicOrigin } from "@/lib/origin";
 import { isInterledgerEnabled, normalizeWallet, recurringInterval, startPayment } from "@/lib/openpayments";
 import { createRecurring, recurringReceipt } from "@/lib/recurring";
 import { intervalLabel } from "@/lib/recurring-interval";
@@ -15,7 +16,7 @@ import { validateMoney, validateWallet } from "@/lib/validators";
  */
 export async function POST(request: Request) {
   const body = await request.json();
-  const origin = new URL(request.url).origin;
+  const origin = publicOrigin(request);
   return handle(async () => {
     const level = parseLevel(body.level);
     const amountCop = Number(body.amountCop);

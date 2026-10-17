@@ -1,5 +1,6 @@
 import type { NextRequest } from "next/server";
 import { withDB } from "@/lib/db";
+import { publicOrigin } from "@/lib/origin";
 import { finishPayment, receivedShare, vaultUrl, verifyInteractHash } from "@/lib/openpayments";
 import { processPayouts } from "@/lib/payouts";
 import { createRecurring, recurringReceipt } from "@/lib/recurring";
@@ -10,7 +11,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   const { id } = await params;
   const q = request.nextUrl.searchParams;
   const back = (status: string, message?: string, txId?: string) => {
-    const url = new URL("/invertir", request.nextUrl.origin);
+    const url = new URL("/invertir", publicOrigin(request));
     url.searchParams.set("pago", status);
     if (message) url.searchParams.set("msg", message);
     if (txId) url.searchParams.set("tx", txId);

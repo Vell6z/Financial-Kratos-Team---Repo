@@ -2,6 +2,7 @@ import { handle, parseLevel } from "@/lib/api";
 import { requireRole, requireUser } from "@/lib/auth";
 import { withDB, newId } from "@/lib/db";
 import { maxWithdrawalCop } from "@/lib/fx";
+import { publicOrigin } from "@/lib/origin";
 import { isInterledgerEnabled, receivedShare, sendFromVault, startPayment, vaultUrl, VaultGrantError } from "@/lib/openpayments";
 import { BusinessError, checkWithdraw, debitWithdraw, refundWithdraw } from "@/lib/services";
 
@@ -12,7 +13,7 @@ import { BusinessError, checkWithdraw, debitWithdraw, refundWithdraw } from "@/l
  */
 export async function POST(request: Request) {
   const body = await request.json();
-  const origin = new URL(request.url).origin;
+  const origin = publicOrigin(request);
   return handle(async () => {
     const level = parseLevel(body.level);
     const amountCop = Number(body.amountCop);

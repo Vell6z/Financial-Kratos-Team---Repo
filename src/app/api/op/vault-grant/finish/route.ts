@@ -1,12 +1,13 @@
 import type { NextRequest } from "next/server";
 import { withDB } from "@/lib/db";
+import { publicOrigin } from "@/lib/origin";
 import { finishVaultGrant, revokeVaultGrant, verifyInteractHash } from "@/lib/openpayments";
 
 /** Vuelta desde la wallet de la bóveda: el operador aprobó (o rechazó) el permiso de retiros automáticos */
 export async function GET(request: NextRequest) {
   const q = request.nextUrl.searchParams;
   const back = (status: string, message?: string) => {
-    const url = new URL("/boveda", request.nextUrl.origin);
+    const url = new URL("/boveda", publicOrigin(request));
     url.searchParams.set("permiso", status);
     if (message) url.searchParams.set("msg", message);
     return Response.redirect(url, 303);

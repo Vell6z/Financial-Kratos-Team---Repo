@@ -1,4 +1,5 @@
 import { handle } from "@/lib/api";
+import { publicOrigin } from "@/lib/origin";
 import { requireAdmin, requireUser } from "@/lib/auth";
 import { withDB } from "@/lib/db";
 import { isInterledgerEnabled, revokeVaultGrant, startVaultGrant } from "@/lib/openpayments";
@@ -6,7 +7,7 @@ import { BusinessError } from "@/lib/services";
 
 /** El operador pide el permiso de la bóveda: devuelve la URL de la wallet donde lo aprueba */
 export async function POST(request: Request) {
-  const origin = new URL(request.url).origin;
+  const origin = publicOrigin(request);
   return handle(async () => {
     await withDB(async (db) => requireAdmin(await requireUser(db)));
     if (!isInterledgerEnabled()) throw new BusinessError("Open Payments no está configurado");
