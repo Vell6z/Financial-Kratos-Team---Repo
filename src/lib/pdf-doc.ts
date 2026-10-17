@@ -147,6 +147,13 @@ export class PdfDoc {
     }
   }
 
+  /** Dibujo libre de `height` puntos de alto: recibe la página y la posición de arriba (pasa de página si no cabe) */
+  draw(height: number, fn: (page: PdfPage, top: number, left: number, width: number) => void) {
+    this.ensure(height);
+    fn(this.page, this.y, M, W);
+    this.y += height;
+  }
+
   /** Firma o sello de texto al final (por ejemplo, del paz y salvo) */
   signature(name: string, role: string) {
     this.ensure(80);

@@ -112,6 +112,10 @@ export default function MyCreditPage() {
           </div>
           <Stat label="Nivel actual" value={levelLabel(data)} sub={data.applicant.historyLevel ? "Según tu historial de pagos" : `Puntaje ${data.applicant.score}/100`} />
           <Stat label="Créditos pagados a tiempo" value={data.applicant.paidOnTime} sub="Pagar a tiempo te sube un nivel" />
+          <div className="col-span-2 flex flex-wrap items-center justify-between gap-2 border-t border-line pt-3 text-sm sm:col-span-3">
+            <span className="text-muted">Tu nivel, tus créditos y cómo los pagaste, en un documento.</span>
+            <PdfLink href="/api/credit-history">Solicitar certificado de historial crediticio (PDF)</PdfLink>
+          </div>
         </Card>
       )}
 

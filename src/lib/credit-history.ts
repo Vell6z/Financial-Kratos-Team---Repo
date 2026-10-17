@@ -139,3 +139,118 @@ export function updateDelinquency(db: DB, t: number) {
     }
   }
 }
+
+// ---------- Puntaje de historial crediticio (300 a 850) ----------
+// Puntaje INTERNO de la plataforma, en la misma escala que usan las centrales de riesgo para que se entienda fácil.
+// No es un puntaje de una central. No decide el nivel (eso lo hacen el estudio y docs/reglas-cambio-de-nivel.md): lo explica.
+
+export const SCORE_MIN = 300;
+export const SCORE_MAX = 850;
+
+/** Rangos del puntaje (como el velocímetro de las centrales) */
+export const SCORE_BANDS = [
+  { label: "Malo", min: 300, max: 629, color: "#e5242b" },
+  { label: "Regular", min: 630, max: 689, color: "#f5a93b" },
+  { label: "Bueno", min: 690, max: 719, color: "#b9d33f" },
+  { label: "Excelente", min: 720, max: 850, color: "#6cbf45" },
+] as const;
+
+export const scoreBand = (score: number) => SCORE_BANDS.find((b) => score <= b.max) ?? SCORE_BANDS[SCORE_BANDS.length - 1];
+
+export interface ScoreFactor {
+  label: string;
+  /** Peso del factor (suman 1) */
+  weight: number;
+  /** Qué tan bien le va en el factor, de 0 a 1 */
+  value: number;
+  /** Puntos que aporta sobre la base de 300 */
+  points: number;
+  /** Qué se tuvo en cuenta */
+  detail: string;
+  /** Qué puede hacer para mejorar (vacío si ya está al máximo) */
+  tip: string;
+}
+
+/** Castigo por el peor atraso (días contados desde el vencimiento) */
+const delayFactor = (worst: number) => (worst <= 3 ? 1 : worst <= 15 ? 0.85 : worst <= 30 ? 0.6 : worst < 90 ? 0.3 : 0.1);
+
+/**
+ * Puntaje de 300 a 850 = 300 + 550 × suma de factores ponderados:
+ * pagos a tiempo 35 %, estudio de crédito 30 %, al día hoy 15 %, experiencia 10 %, sin reportes 10 %.
+ * Con reporte en mora queda máximo en 579; bloqueado, máximo en 629 (rango "Malo").
+ */
+export function creditScore(db: DB, a: Applicant, t: number) {
+  const loans = db.loans.filter((l) => l.cedula === a.cedula && l.disbursedAt);
+  // Cuotas que ya cuentan: pagadas o en mora. Las que están "por pagar" (dentro de sus 3 días) aún no cuentan en contra
+  const installments = loans.flatMap((l) => l.schedule.filter((i) => i.paidAt || (i.dueAt <= t && daysLate(i, t) > DELINQUENCY.daysToPay)));
+  const onTime = installments.filter((i) => i.paidAt && daysLate(i, t) <= DELINQUENCY.daysToPay).length;
+  const worst = Math.max(0, ...loans.map((l) => worstDelay(l, t)));
+  const paidLoans = loans.filter((l) => l.status === "pagado").length;
+  const active = loans.find((l) => l.status === "activo");
+  const arrears = active ? currentArrears(active, t) : 0;
+  const reports = loans.filter((l) => l.creditReport && l.creditReport.status !== "al_dia");
+  const reported = reports.some((l) => l.creditReport!.status === "en_mora");
+
+  const history = installments.length
+    ? // Puntualidad × castigo por el peor atraso × confianza (con pocos créditos todavía no es un historial completo)
+      (onTime / installments.length) * delayFactor(worst) * Math.min(1, 0.6 + 0.2 * paidLoans)
+    : 0.5;
+  const current = arrears <= DELINQUENCY.daysToPay ? 1 : arrears <= 15 ? 0.5 : arrears <= 30 ? 0.25 : 0;
+  const experience = [0.3, 0.6, 0.8][paidLoans] ?? 1;
+  const noReports = reports.length === 0 ? 1 : reported ? 0 : reports.some((l) => l.creditReport!.status === "aviso") ? 0.5 : 0.3;
+
+  const raw: Omit<ScoreFactor, "points">[] = [
+    {
+      label: "Pagos a tiempo",
+      weight: 0.35,
+      value: history,
+      detail: installments.length
+        ? `${onTime} de ${installments.length} cuotas pagadas a tiempo · peor atraso ${worst} ${worst === 1 ? "día" : "días"}`
+        : "Todavía no tiene cuotas vencidas: sin historial de pagos",
+      tip:
+        history >= 0.99
+          ? ""
+          : !installments.length
+            ? "Tu primer crédito pagado a tiempo construye tu historial."
+            : onTime === installments.length
+              ? "Sigue pagando a tiempo: con más créditos pagados tu historial pesa más."
+              : "Paga cada cuota dentro de los 3 días de la solicitud de pago.",
+    },
+    {
+      label: "Estudio de crédito",
+      weight: 0.3,
+      value: a.score / 100,
+      detail: `Puntaje del estudio ${a.score}/100`,
+      tip: a.score >= 90 ? "" : "Respalda tus respuestas con documentos y referencias que confirmen.",
+    },
+    {
+      label: "Al día hoy",
+      weight: 0.15,
+      value: current,
+      detail: !active ? "Sin crédito vigente" : arrears > DELINQUENCY.daysToPay ? `Crédito vigente con ${arrears} días de atraso` : "Crédito vigente al día",
+      tip: current >= 1 ? "" : "Ponte al día con la cuota en mora.",
+    },
+    {
+      label: "Experiencia",
+      weight: 0.1,
+      value: experience,
+      detail: `${paidLoans} ${paidLoans === 1 ? "crédito pagado" : "créditos pagados"}`,
+      tip: experience >= 1 ? "" : "Cada crédito que terminas de pagar suma experiencia.",
+    },
+    {
+      label: "Sin reportes negativos",
+      weight: 0.1,
+      value: noReports,
+      detail: reports.length === 0 ? "Sin avisos ni reportes" : reported ? "Reportado en mora (simulado)" : "Con aviso o reporte de una obligación ya pagada",
+      tip: noReports >= 1 ? "" : "Evita llegar a 70 días de mora: ahí empieza el aviso de reporte.",
+    },
+  ];
+  const factors: ScoreFactor[] = raw.map((f) => ({ ...f, points: Math.round(550 * f.weight * f.value) }));
+  let score = SCORE_MIN + factors.reduce((s, f) => s + f.points, 0);
+  // Topes: con reporte en mora o bloqueado no puede salir del rango "Malo"
+  const blocked = Boolean(a.blockedUntil && a.blockedUntil > t);
+  if (reported) score = Math.min(score, 579);
+  if (blocked) score = Math.min(score, 629);
+  score = Math.max(SCORE_MIN, Math.min(SCORE_MAX, score));
+  return { score, band: scoreBand(score), factors, capped: reported ? "reporte" : blocked ? "bloqueo" : null };
+}

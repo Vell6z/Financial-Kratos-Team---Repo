@@ -102,6 +102,36 @@ export class PdfPage {
   line(x1: number, y1: number, x2: number, y2: number, color: Rgb, width = 0.5) {
     this.ops.push(`${n(color[0])} ${n(color[1])} ${n(color[2])} RG ${n(width)} w ${n(x1)} ${n(this.height - y1)} m ${n(x2)} ${n(this.height - y2)} l S`);
   }
+
+  /** Polígono relleno (puntos con y medida desde arriba). Sirve para arcos y figuras aproximadas con muchos puntos */
+  polygon(points: [number, number][], color: Rgb) {
+    const [first, ...rest] = points;
+    const path = [`${n(first[0])} ${n(this.height - first[1])} m`, ...rest.map(([x, y]) => `${n(x)} ${n(this.height - y)} l`)].join(" ");
+    this.ops.push(`${n(color[0])} ${n(color[1])} ${n(color[2])} rg ${path} h f`);
+  }
+
+  /** Círculo relleno (aproximado con un polígono) */
+  circle(cx: number, cy: number, r: number, color: Rgb) {
+    this.polygon(
+      Array.from({ length: 48 }, (_, i) => [cx + r * Math.cos((i / 48) * 2 * Math.PI), cy + r * Math.sin((i / 48) * 2 * Math.PI)] as [number, number]),
+      color,
+    );
+  }
+
+  /** Texto centrado en (x, y) y rotado `degrees` en sentido antihorario */
+  textRotated(x: number, y: number, text: string, degrees: number, opts: { size?: number; bold?: boolean; color?: Rgb } = {}) {
+    const size = opts.size ?? 10;
+    const w = textWidth(text, size, opts.bold);
+    const a = (degrees * Math.PI) / 180;
+    const [cos, sin] = [Math.cos(a), Math.sin(a)];
+    // Desde el centro, retrocede media palabra a lo largo de la línea base y baja un tercio del tamaño
+    const px = x - (w / 2) * cos + (size / 3) * sin;
+    const py = this.height - y - (w / 2) * sin - (size / 3) * cos;
+    const [r, g, b] = opts.color ?? [0.1, 0.1, 0.12];
+    this.ops.push(
+      `BT /${opts.bold ? "F2" : "F1"} ${n(size)} Tf ${n(r)} ${n(g)} ${n(b)} rg ${n(cos)} ${n(sin)} ${n(-sin)} ${n(cos)} ${n(px)} ${n(py)} Tm (${escape(encode(text))}) Tj ET`,
+    );
+  }
 }
 
 /** Arma el archivo PDF con las páginas dibujadas */

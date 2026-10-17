@@ -59,7 +59,7 @@ python3 ml/train_baseline.py   # entrena el modelo base y escribe ml/modelo/regr
 - Documentos PDF, sin dependencias:
   - `pdf.ts` genera el archivo y `pdf-doc.ts` da el diseño común (encabezado, secciones, tablas, pie);
   - `receipts.ts`: comprobante de cada movimiento (inversión, retiro, desembolso, pago) en `/api/receipts/[id]`;
-  - `credit-docs.ts`: plan de pagos (`/api/loans/[id]/plan`) y paz y salvo (`/api/loans/[id]/paz-y-salvo`, solo con el crédito pagado);
+  - `credit-docs.ts`: plan de pagos (`/api/loans/[id]/plan`), paz y salvo (`/api/loans/[id]/paz-y-salvo`, solo con el crédito pagado) y certificado de historial crediticio (`/api/credit-history`, lo solicita el acreditado desde `/mi-credito`), con velocímetro de puntaje 300–850 (`creditScore` en `credit-history.ts`: interno, explica el nivel pero no lo decide);
   - `pdf-response.ts`: responde el PDF (con `?descargar` lo baja como archivo).
 - `demo-seed.ts` — inversiones precargadas de la cuenta demo de inversionista (una sola vez, `db.demoSeeded`).
 - `demo-accounts.ts` — cuentas demo (inversionista, acreditado, operador). **Sus credenciales viven solo ahí: no repetirlas en chats, docs ni commits nuevos.**
