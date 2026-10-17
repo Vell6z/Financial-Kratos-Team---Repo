@@ -455,6 +455,7 @@ export function completeDisbursement(db: DB, loanId: string, check: { directory:
   loan.disbursedAt = t;
   loan.schedule = buildSchedule(loan.amount, loan.rateEA, loan.installments, t);
   addTx(db, "desembolso_breb", loan.level, loan.amount, `Desembolso a ${loan.name} · llave ${loan.llaveBreb} · ${check.financialEntity.name} · ${loan.payout.id}`, "simulado", { cedula: loan.cedula });
+  db.txs[0].loanId = loan.id;
   advance(db, loan, "DISBURSED");
 }
 
@@ -509,6 +510,9 @@ export function receiveBrebPayment(db: DB, loanId: string, opts: { toKey: string
   pool.liquidity += amount;
   const what = applied.map((a) => `cuota ${a.n}${a.completed ? "" : " (abono)"}`).join(", ");
   const txId = addTx(db, "pago_breb", loan.level, amount, `Bre-B de ${loan.name} (${opts.fromKey}) a ${VAULT_BREB.key}: ${what}`, "simulado", { cedula: loan.cedula });
+  const reference = `BREB-${txId.slice(0, 8).toUpperCase()}`;
+  db.txs[0].loanId = loan.id;
+  db.txs[0].breb = { reference, fromKey: opts.fromKey, toKey: VAULT_BREB.key, applied, owedAfter: loan.schedule.reduce((s, i) => s + installmentDue(i), 0) };
 
   if (loan.schedule.every((i) => i.paidAt)) {
     loan.status = "pagado";
@@ -517,7 +521,7 @@ export function receiveBrebPayment(db: DB, loanId: string, opts: { toKey: string
     if (onTime && a) a.paidOnTime += 1;
   }
   fundWaitingLoans(db, loan.level);
-  return { loan, receipt: { reference: `BREB-${txId.slice(0, 8).toUpperCase()}`, at: t, amount, applied, toKey: VAULT_BREB.key, fromKey: opts.fromKey } };
+  return { loan, receipt: { txId, reference, at: t, amount, applied, toKey: VAULT_BREB.key, fromKey: opts.fromKey } };
 }
 
 export function loanView(db: DB, loan: Loan) {
@@ -528,5 +532,7 @@ export function loanView(db: DB, loan: Loan) {
   /** Días que faltan para la próxima cuota (negativo si ya venció) */
   const daysToNext = loan.status === "activo" && next ? Math.ceil((next.dueAt - t) / DAY_MS) : null;
   const owed = loan.schedule.reduce((s, i) => s + installmentDue(i), 0);
-  return { ...loan, now: t, overdue, daysLate, daysToNext, nextInstallment: next ?? null, nextDue: next ? installmentDue(next) : 0, owed };
+  // Movimiento del desembolso, para su comprobante en PDF (los anteriores se reconocen por el id del payout)
+  const disbursementTxId = db.txs.find((x) => x.kind === "desembolso_breb" && (x.loanId === loan.id || (loan.payout && x.detail.includes(loan.payout.id))))?.id ?? null;
+  return { ...loan, disbursementTxId, now: t, overdue, daysLate, daysToNext, nextInstallment: next ?? null, nextDue: next ? installmentDue(next) : 0, owed };
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useToast } from "@/components/feedback";
 import { Alert, Badge, Button, Card, EmptyState, MoneyInput, PageHeader, Spinner, Stat, api, fmtDate } from "@/components/ui";
@@ -41,9 +41,12 @@ interface LoanView {
   nextDue: number;
   owed: number;
   disbursedAt?: number;
+  /** Para el comprobante del desembolso en PDF */
+  disbursementTxId: string | null;
 }
 
 interface Receipt {
+  txId: string;
   reference: string;
   at: number;
   amount: number;
@@ -114,9 +117,16 @@ export default function MyCreditPage() {
 
           {(loan.status === "activo" || loan.status === "pagado") && <Progress loan={loan} />}
 
+          {loan.status !== "cancelado" && (
+            <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
+              <PdfLink href={`/api/loans/${loan.id}/plan`}>{loan.status === "en_espera" ? "Plan de pagos estimado (PDF)" : "Plan de pagos (PDF)"}</PdfLink>
+              {loan.status === "pagado" && <PdfLink href={`/api/loans/${loan.id}/paz-y-salvo`}>Paz y salvo (PDF)</PdfLink>}
+            </div>
+          )}
+
           <LoanNotice loan={loan} />
 
-          {loan.payout && <PayoutReceipt payout={loan.payout} />}
+          {loan.payout && <PayoutReceipt payout={loan.payout} txId={loan.disbursementTxId} />}
 
           {(loan.status === "activo" || loan.status === "pagado") && (
             <div className="overflow-x-auto">
@@ -416,6 +426,14 @@ function BrebTransfer({ loan, onClose, onPaid }: { loan: LoanView; onClose: () =
                   <Line key={a.n} k={`Cuota ${a.n}`} v={`${cop(a.amount)} · ${a.completed ? "pagada" : "abono"}`} />
                 ))}
               </div>
+              <a
+                href={`/api/receipts/${receipt.txId}`}
+                target="_blank"
+                rel="noopener"
+                className="block text-center text-sm font-medium text-brand hover:underline"
+              >
+                Ver comprobante (PDF)
+              </a>
               <Button className="w-full" onClick={onClose}>
                 Listo
               </Button>
@@ -446,7 +464,7 @@ const DIRECTORY: Record<NonNullable<LoanView["payout"]>["directory"], string> = 
 };
 
 /** Comprobante del desembolso: la llave se re-verificó y el payout quedó armado (sin enviar dinero real) */
-function PayoutReceipt({ payout }: { payout: NonNullable<LoanView["payout"]> }) {
+function PayoutReceipt({ payout, txId }: { payout: NonNullable<LoanView["payout"]>; txId: string | null }) {
   const bank = bankName(payout.beneficiary.financialEntity.name);
   const code = payout.beneficiary.financialEntity.code;
   return (
@@ -480,8 +498,19 @@ function PayoutReceipt({ payout }: { payout: NonNullable<LoanView["payout"]> }) 
         <Alert tone="info" title="Payout simulado">
           Es exactamente lo que se le enviaría a Wompi (montos en centavos; la referencia evita pagar dos veces), pero no se envió: no se movió dinero real.
         </Alert>
+        {txId && <PdfLink href={`/api/receipts/${txId}`}>Comprobante de desembolso (PDF)</PdfLink>}
       </div>
     </details>
+  );
+}
+
+/** Enlace a un documento PDF (se abre en otra pestaña) */
+function PdfLink({ href, children }: { href: string; children: ReactNode }) {
+  return (
+    <a href={href} target="_blank" rel="noopener" className="inline-flex items-center gap-1 font-medium text-brand hover:underline">
+      <span aria-hidden="true">↓</span>
+      {children}
+    </a>
   );
 }
 

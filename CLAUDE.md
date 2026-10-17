@@ -53,7 +53,11 @@ python3 ml/train_baseline.py   # entrena el modelo base y escribe ml/modelo/regr
 **Soporte**
 - `auth.ts` (sesión por cookie `kratos_session`, `requireUser` / `requireRole` / `requireAdmin` / `requirePageRole`), `password.ts` (scrypt).
 - `validators.ts` (validaciones compartidas navegador/servidor), `registration.ts`, `notifications.ts`, `dashboard.ts`, `nav.ts`, `api.ts` (`handle()` convierte errores en JSON).
-- `pdf.ts` (generador de PDF sin dependencias) y `receipts.ts` — comprobantes de inversiones y retiros en `/api/receipts/[id]`.
+- Documentos PDF, sin dependencias:
+  - `pdf.ts` genera el archivo y `pdf-doc.ts` da el diseño común (encabezado, secciones, tablas, pie);
+  - `receipts.ts`: comprobante de cada movimiento (inversión, retiro, desembolso, pago) en `/api/receipts/[id]`;
+  - `credit-docs.ts`: plan de pagos (`/api/loans/[id]/plan`) y paz y salvo (`/api/loans/[id]/paz-y-salvo`, solo con el crédito pagado);
+  - `pdf-response.ts`: responde el PDF (con `?descargar` lo baja como archivo).
 - `demo-seed.ts` — inversiones precargadas de la cuenta demo de inversionista (una sola vez, `db.demoSeeded`).
 - `demo-accounts.ts` — cuentas demo (inversionista, acreditado, operador). **Sus credenciales viven solo ahí: no repetirlas en chats, docs ni commits nuevos.**
 
@@ -109,7 +113,7 @@ python3 ml/train_baseline.py   # entrena el modelo base y escribe ml/modelo/regr
 | Verificación de llaves Bre-B | **Real** contra el directorio de producción de Wompi, solo lectura (`WOMPI_RESOLVE_ENV=production`) |
 | Lector de QR Bre-B | **Real**, probado con QR de Bancolombia y Nequi |
 | Lectura de documentos | **Gemini** (`gemini-3.8-flash`, una sola llamada por estudio, `thinkingLevel: low`, ~10 s) si hay `GEMINI_API_KEY`; si no, trucos en el nombre (`factura_mora`, `extracto_1000000`, "alterad"). El plan gratuito permite ~5 llamadas por minuto |
-| Comprobantes de inversión y retiro | PDF generado en el servidor, con la cotización y la confirmación del cobro |
+| Comprobantes, plan de pagos y paz y salvo | PDF generado en el servidor. Los de inversión y retiro llevan la cotización y la confirmación del cobro |
 | Inversiones de la cuenta demo | Precargadas (marcadas como demostración, sin Interledger) |
 | Desembolso (payout) | Simulado: payout armado, no enviado |
 | Pago de cuotas | Simulador de banco en `/mi-credito` |
@@ -178,6 +182,5 @@ Wallets de prueba (en `.env`, no en el código):
 **Se pueden hacer ya**
 - Prueba de punta a punta de una inversión y un retiro reales: aprobar en la wallet `usdtroly` y autorizar la bóveda en `/boveda`.
 - Robustez de `db.json` (no arrancar vacía si el archivo no se puede leer).
-- Plan de pagos y comprobantes del acreditado en PDF (desembolso, abonos, paz y salvo).
 - Referencias y verificación facial reales.
 - https en desarrollo para la cámara del celular.

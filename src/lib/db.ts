@@ -30,6 +30,20 @@ export interface Tx {
   lots?: { id: string; amount: number; early: boolean }[];
   /** Inversión o retiro: datos para el comprobante (cotización y lo confirmado por quien recibe) */
   receipt?: TxReceipt;
+  /** Desembolso o pago de cuota: crédito al que pertenece */
+  loanId?: string;
+  /** Pago de cuota por Bre-B: para el comprobante del abono */
+  breb?: BrebPaymentInfo;
+}
+
+export interface BrebPaymentInfo {
+  reference: string;
+  fromKey: string;
+  toKey: string;
+  /** A qué cuotas se aplicó y si quedaron pagadas */
+  applied: { n: number; amount: number; completed: boolean }[];
+  /** Saldo del crédito después de este pago */
+  owedAfter: number;
 }
 
 export interface TxReceipt {
