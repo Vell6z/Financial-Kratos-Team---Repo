@@ -1,5 +1,7 @@
 import "server-only";
-import { createHash, timingSafeEqual } from "node:crypto";
+import { createHash, createPrivateKey, timingSafeEqual, type KeyObject } from "node:crypto";
+import { existsSync, readFileSync } from "node:fs";
+import { resolve as resolvePath } from "node:path";
 import { copRate, type CopRate } from "./fx";
 import {
   AuthenticatedClient,
@@ -22,19 +24,58 @@ import { DEFAULT_RECURRING_INTERVAL, parseDuration } from "./recurring-interval"
 const platformUrl = () => process.env.OP_PLATFORM_WALLET_ADDRESS || process.env.OP_WALLET_ADDRESS;
 
 export function isInterledgerEnabled() {
-  return Boolean(platformUrl() && process.env.OP_KEY_ID && (process.env.OP_PRIVATE_KEY_PATH || process.env.OP_PRIVATE_KEY));
+  return Boolean(platformUrl() && process.env.OP_KEY_ID && (process.env.OP_PRIVATE_KEY_PATH || process.env.OP_PRIVATE_KEY || process.env.OP_PRIVATE_KEY_BASE64));
 }
 
 export const vaultUrl = () => process.env.OP_VAULT_WALLET_ADDRESS || platformUrl()!;
 
 let clientPromise: Promise<AuthenticatedClient> | null = null;
 
+/** Arma un PEM válido aunque la llave venga pegada con comillas, en una sola línea, con "\n" literales o en base64 */
+function normalizePem(raw: string) {
+  let s = raw.trim().replace(/^['"]|['"]$/g, "").replace(/\\n/g, "\n").replace(/\r/g, "").trim();
+  // Sin encabezado: puede ser el PEM completo en base64 (OP_PRIVATE_KEY_BASE64 o pegado así)
+  if (!s.startsWith("-----")) {
+    const decoded = Buffer.from(s, "base64").toString("utf8").trim();
+    if (decoded.startsWith("-----")) s = decoded;
+  }
+  // PEM en una sola línea (los saltos se perdieron al pegar): se rearma encabezado / cuerpo / pie
+  const m = s.match(/^(-----BEGIN [A-Z ]+-----)\s*([\s\S]*?)\s*(-----END [A-Z ]+-----)$/);
+  if (m) s = `${m[1]}\n${m[2].replace(/\s+/g, "")}\n${m[3]}\n`;
+  return s;
+}
+
+/**
+ * Llave privada de la plataforma. En local: archivo (OP_PRIVATE_KEY_PATH). En la nube (Vercel): el contenido en
+ * OP_PRIVATE_KEY u OP_PRIVATE_KEY_BASE64. La ruta solo se usa si el archivo existe, así una variable vieja no estorba.
+ */
+function platformPrivateKey(): KeyObject {
+  const file = process.env.OP_PRIVATE_KEY_PATH?.trim();
+  if (file && existsSync(resolvePath(process.cwd(), file))) return createPrivateKey(readFileSync(resolvePath(process.cwd(), file)));
+  const raw = process.env.OP_PRIVATE_KEY || process.env.OP_PRIVATE_KEY_BASE64;
+  if (!raw)
+    throw new Error(
+      file
+        ? `No existe el archivo de la llave (${file}). En la nube usa OP_PRIVATE_KEY con el contenido de private.key y borra OP_PRIVATE_KEY_PATH.`
+        : "Falta la llave privada: define OP_PRIVATE_KEY_PATH (archivo) u OP_PRIVATE_KEY (contenido).",
+    );
+  try {
+    return createPrivateKey(normalizePem(raw));
+  } catch {
+    throw new Error("OP_PRIVATE_KEY no es una llave válida. Pega el contenido completo de private.key, incluidas las líneas BEGIN y END.");
+  }
+}
+
 function getClient() {
-  clientPromise ??= createAuthenticatedClient({
-    walletAddressUrl: platformUrl()!,
-    keyId: process.env.OP_KEY_ID!,
-    privateKey: process.env.OP_PRIVATE_KEY_PATH || process.env.OP_PRIVATE_KEY!.replace(/\\n/g, "\n"),
-  }).catch((err) => {
+  clientPromise ??= Promise.resolve()
+    .then(() =>
+      createAuthenticatedClient({
+        walletAddressUrl: platformUrl()!,
+        keyId: process.env.OP_KEY_ID!,
+        privateKey: platformPrivateKey(),
+      }),
+    )
+    .catch((err) => {
     clientPromise = null;
     throw err;
   });
