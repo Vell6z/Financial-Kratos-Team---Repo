@@ -9,6 +9,8 @@
 *.pem
 *.key
 secrets.*
+# Carpeta de secretos completa (llaves de Open Payments, etc.)
+secrets/
 
 
 # === Dependencias ===
@@ -81,3 +83,12 @@ target/
 Thumbs.db
 desktop.ini
 *~
+
+# === Next.js / demo ===
+.vercel
+next-env.d.ts
+# Base de datos local de la demo (solo la carpeta de la raíz, no cualquier "data")
+/data/
+
+# === Claude Code: configuración personal de cada quien (launch.json sí se comparte) ===
+.claude/settings.local.json

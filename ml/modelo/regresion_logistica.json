@@ -1,0 +1,656 @@
+{
+ "tipo": "regresion_logistica",
+ "objetivo": "incumplio (mora de 30 días o más)",
+ "l2": 0.3,
+ "intercepto": -2.740935348936719,
+ "variables": [
+  {
+   "nombre": "antiguedad_actividad=1a2",
+   "media": 0.22648275862068964,
+   "desviacion": 0.41855503660600246,
+   "peso": -0.06192406768237478
+  },
+  {
+   "nombre": "antiguedad_actividad=6a11",
+   "media": 0.16413793103448276,
+   "desviacion": 0.3704006892949879,
+   "peso": 0.07293978223876517
+  },
+  {
+   "nombre": "antiguedad_actividad=gt2",
+   "media": 0.43586206896551727,
+   "desviacion": 0.4958692628129071,
+   "peso": -0.21552183150914192
+  },
+  {
+   "nombre": "antiguedad_actividad=lt6",
+   "media": 0.17351724137931035,
+   "desviacion": 0.3786938187024242,
+   "peso": 0.2793083258403135
+  },
+  {
+   "nombre": "antiguedad_vivienda=1a2",
+   "media": 0.24441379310344827,
+   "desviacion": 0.42973909624821555,
+   "peso": -0.024217798745593988
+  },
+  {
+   "nombre": "antiguedad_vivienda=gt2",
+   "media": 0.5257931034482759,
+   "desviacion": 0.49933427262156416,
+   "peso": -0.12061584973498628
+  },
+  {
+   "nombre": "antiguedad_vivienda=lt1",
+   "media": 0.22979310344827586,
+   "desviacion": 0.42069969462300044,
+   "peso": 0.167898773027164
+  },
+  {
+   "nombre": "arriendo=aveces",
+   "media": 0.18151724137931036,
+   "desviacion": 0.38544614729084464,
+   "peso": -0.08090384064410501
+  },
+  {
+   "nombre": "arriendo=debo",
+   "media": 0.11420689655172414,
+   "desviacion": 0.3180623859115503,
+   "peso": 0.021579306661052296
+  },
+  {
+   "nombre": "arriendo=propia",
+   "media": 0.3252413793103448,
+   "desviacion": 0.4684649661337006,
+   "peso": 0.07830688049700811
+  },
+  {
+   "nombre": "arriendo=siempre",
+   "media": 0.37903448275862067,
+   "desviacion": 0.4851467238254068,
+   "peso": -0.02548408883029852
+  },
+  {
+   "nombre": "celular_propio=no",
+   "media": 0.11696551724137931,
+   "desviacion": 0.32137919194906805,
+   "peso": 0.00254705165855705
+  },
+  {
+   "nombre": "celular_propio=si",
+   "media": 0.8830344827586207,
+   "desviacion": 0.321379191949068,
+   "peso": -0.0025470516585569475
+  },
+  {
+   "nombre": "ciudad=Barranquilla",
+   "media": 0.09351724137931035,
+   "desviacion": 0.2911559151796751,
+   "peso": 0.025019627733105336
+  },
+  {
+   "nombre": "ciudad=Bogotá",
+   "media": 0.2383448275862069,
+   "desviacion": 0.4260710864974391,
+   "peso": -0.04524447018878621
+  },
+  {
+   "nombre": "ciudad=Bucaramanga",
+   "media": 0.06317241379310345,
+   "desviacion": 0.24327280967805745,
+   "peso": 0.026818410984729972
+  },
+  {
+   "nombre": "ciudad=Cali",
+   "media": 0.11751724137931034,
+   "desviacion": 0.32203561815101645,
+   "peso": 0.008540062624632192
+  },
+  {
+   "nombre": "ciudad=Cartagena",
+   "media": 0.07420689655172413,
+   "desviacion": 0.26210729302307834,
+   "peso": -0.029794799851192863
+  },
+  {
+   "nombre": "ciudad=Cúcuta",
+   "media": 0.06262068965517241,
+   "desviacion": 0.2422794644254502,
+   "peso": 0.05152127763988803
+  },
+  {
+   "nombre": "ciudad=Medellín",
+   "media": 0.14455172413793105,
+   "desviacion": 0.3516482947302354,
+   "peso": -0.014759100700856025
+  },
+  {
+   "nombre": "ciudad=Montería",
+   "media": 0.055724137931034486,
+   "desviacion": 0.22938822633883701,
+   "peso": -0.002584728046908918
+  },
+  {
+   "nombre": "ciudad=Pasto",
+   "media": 0.040827586206896554,
+   "desviacion": 0.19789061223669754,
+   "peso": -0.026360149754670825
+  },
+  {
+   "nombre": "ciudad=Pereira",
+   "media": 0.050482758620689655,
+   "desviacion": 0.21893891774359084,
+   "peso": -0.011057416627600784
+  },
+  {
+   "nombre": "ciudad=Quibdó",
+   "media": 0.030620689655172412,
+   "desviacion": 0.17228773322617613,
+   "peso": 0.038641459507277535
+  },
+  {
+   "nombre": "ciudad=Villavicencio",
+   "media": 0.028413793103448277,
+   "desviacion": 0.16615188673296102,
+   "peso": 0.02893758603409388
+  },
+  {
+   "nombre": "compras_credito=aldia",
+   "media": 0.40248275862068966,
+   "desviacion": 0.49039819293485304,
+   "peso": 0.010863109606366848
+  },
+  {
+   "nombre": "compras_credito=atrasos",
+   "media": 0.1343448275862069,
+   "desviacion": 0.34102242578317227,
+   "peso": -0.03144313715739415
+  },
+  {
+   "nombre": "compras_credito=mora",
+   "media": 0.08110344827586206,
+   "desviacion": 0.2729939174297234,
+   "peso": 0.006899164192734045
+  },
+  {
+   "nombre": "compras_credito=nunca",
+   "media": 0.3820689655172414,
+   "desviacion": 0.48589327131153653,
+   "peso": 0.007228204081909919
+  },
+  {
+   "nombre": "cuota_sobre_disponible",
+   "media": 0.38818234482758623,
+   "desviacion": 0.2824537081242207,
+   "peso": 0.29528322513667177
+  },
+  {
+   "nombre": "cuota_sobre_ingreso",
+   "media": 0.13535839471233405,
+   "desviacion": 0.07066404414792092,
+   "peso": 0.2190000818582458
+  },
+  {
+   "nombre": "cuotas",
+   "media": 3.3853793103448275,
+   "desviacion": 1.4334549633615041,
+   "peso": 0.3891093786906681
+  },
+  {
+   "nombre": "deudas_sobre_ingreso",
+   "media": 0.07725618471039021,
+   "desviacion": 0.10275406158661625,
+   "peso": 0.2771799490027922
+  },
+  {
+   "nombre": "doc_alterado",
+   "media": 0.0,
+   "desviacion": 1,
+   "peso": 0.0
+  },
+  {
+   "nombre": "doc_arriendo",
+   "media": 0.20027586206896553,
+   "desviacion": 0.4002067479959555,
+   "peso": 0.09647662648819305
+  },
+  {
+   "nombre": "doc_extracto",
+   "media": 0.41572413793103447,
+   "desviacion": 0.492846405153302,
+   "peso": -0.10878649261100881
+  },
+  {
+   "nombre": "doc_factura",
+   "media": 0.4066206896551724,
+   "desviacion": 0.4912029157074746,
+   "peso": -0.09300773793317517
+  },
+  {
+   "nombre": "doc_libreta",
+   "media": 0.20993103448275863,
+   "desviacion": 0.4072591254272364,
+   "peso": 0.03774492702842484
+  },
+  {
+   "nombre": "doc_pazysalvo",
+   "media": 0.1809655172413793,
+   "desviacion": 0.3849896087051433,
+   "peso": -0.04277653880826285
+  },
+  {
+   "nombre": "doc_recargas",
+   "media": 0.2612413793103448,
+   "desviacion": 0.4393111893024959,
+   "peso": -0.015976754672836362
+  },
+  {
+   "nombre": "edad",
+   "media": 37.87310344827586,
+   "desviacion": 10.540635688298709,
+   "peso": 0.0994720210956876
+  },
+  {
+   "nombre": "escolaridad=bachillerato",
+   "media": 0.45406896551724135,
+   "desviacion": 0.4978858705279189,
+   "peso": -0.009604132785440136
+  },
+  {
+   "nombre": "escolaridad=primaria",
+   "media": 0.29213793103448277,
+   "desviacion": 0.4547453796196005,
+   "peso": 0.009051753684029582
+  },
+  {
+   "nombre": "escolaridad=tecnico",
+   "media": 0.1746206896551724,
+   "desviacion": 0.379642337469788,
+   "peso": 0.017454273207683377
+  },
+  {
+   "nombre": "escolaridad=universitario",
+   "media": 0.07917241379310345,
+   "desviacion": 0.27000767153411964,
+   "peso": -0.022076640260832336
+  },
+  {
+   "nombre": "estrato",
+   "media": 1.792551724137931,
+   "desviacion": 0.7729921972308555,
+   "peso": 0.02115015737027449
+  },
+  {
+   "nombre": "factura_con_mora",
+   "media": 0.18675862068965518,
+   "desviacion": 0.38971763917964075,
+   "peso": 0.15735770408712782
+  },
+  {
+   "nombre": "gastos_sobre_ingreso",
+   "media": 0.5315204718017089,
+   "desviacion": 0.16346823795515836,
+   "peso": -0.537492579072521
+  },
+  {
+   "nombre": "gota_a_gota=no",
+   "media": 0.9216551724137931,
+   "desviacion": 0.2687134450984811,
+   "peso": -0.21550963992368133
+  },
+  {
+   "nombre": "gota_a_gota=si",
+   "media": 0.0783448275862069,
+   "desviacion": 0.2687134450984811,
+   "peso": 0.21550963992368144
+  },
+  {
+   "nombre": "ingreso_vs_extracto",
+   "media": 0.031731375296711495,
+   "desviacion": 0.09781261947278425,
+   "peso": 0.09365432006708974
+  },
+  {
+   "nombre": "likert_1",
+   "media": 3.4747586206896552,
+   "desviacion": 1.1281893230449311,
+   "peso": -0.1190958947877854
+  },
+  {
+   "nombre": "likert_10",
+   "media": 3.4924137931034482,
+   "desviacion": 1.1396359224207613,
+   "peso": -0.006478501992537224
+  },
+  {
+   "nombre": "likert_11",
+   "media": 2.6126896551724137,
+   "desviacion": 1.1798557802997693,
+   "peso": 0.23957979422300102
+  },
+  {
+   "nombre": "likert_2",
+   "media": 3.454344827586207,
+   "desviacion": 1.15007574790599,
+   "peso": -0.11010855568655997
+  },
+  {
+   "nombre": "likert_3",
+   "media": 2.531586206896552,
+   "desviacion": 1.1469459752554076,
+   "peso": 0.1158215257309136
+  },
+  {
+   "nombre": "likert_4",
+   "media": 3.492137931034483,
+   "desviacion": 1.1323489082171392,
+   "peso": -0.2170226365731661
+  },
+  {
+   "nombre": "likert_5",
+   "media": 2.5122758620689654,
+   "desviacion": 1.1376568447092963,
+   "peso": 0.07713187754088724
+  },
+  {
+   "nombre": "likert_6",
+   "media": 3.4995862068965518,
+   "desviacion": 1.1418375244418724,
+   "peso": -0.1997993671382114
+  },
+  {
+   "nombre": "likert_7",
+   "media": 2.492137931034483,
+   "desviacion": 1.125506896504183,
+   "peso": 0.10125977981654392
+  },
+  {
+   "nombre": "likert_8",
+   "media": 3.479448275862069,
+   "desviacion": 1.147917922880134,
+   "peso": -0.24637922994342612
+  },
+  {
+   "nombre": "likert_9",
+   "media": 2.488551724137931,
+   "desviacion": 1.1561857500868638,
+   "peso": 0.2230939591167985
+  },
+  {
+   "nombre": "log_antiguedad_linea",
+   "media": 4.144569296659643,
+   "desviacion": 0.7066700641742117,
+   "peso": -0.14253913592974213
+  },
+  {
+   "nombre": "log_ingreso_declarado",
+   "media": 14.251339321610835,
+   "desviacion": 0.5348535572077915,
+   "peso": 0.2569187054265696
+  },
+  {
+   "nombre": "log_monto",
+   "media": 12.509390316554017,
+   "desviacion": 0.779645525027126,
+   "peso": 0.1458507173197398
+  },
+  {
+   "nombre": "log_recargas_mes",
+   "media": 10.510355509762894,
+   "desviacion": 0.6369116779186761,
+   "peso": -0.07216804098009592
+  },
+  {
+   "nombre": "log_transacciones_billetera",
+   "media": 3.2306615256256723,
+   "desviacion": 0.8428798995261995,
+   "peso": -0.027156087365736888
+  },
+  {
+   "nombre": "lugar_trabajo=cambia",
+   "media": 0.20193103448275862,
+   "desviacion": 0.401441019074386,
+   "peso": -0.003432160181241285
+  },
+  {
+   "nombre": "lugar_trabajo=fijo",
+   "media": 0.4844137931034483,
+   "desviacion": 0.4997570111109777,
+   "peso": -0.008159028510391002
+  },
+  {
+   "nombre": "lugar_trabajo=ruta",
+   "media": 0.3136551724137931,
+   "desviacion": 0.46397802235867475,
+   "peso": 0.0117577586002318
+  },
+  {
+   "nombre": "margen_declarado",
+   "media": 0.39122334348790083,
+   "desviacion": 0.19252353821318707,
+   "peso": 0.3084381256217914
+  },
+  {
+   "nombre": "natillera=atraso",
+   "media": 0.1329655172413793,
+   "desviacion": 0.33953746253706935,
+   "peso": -0.013479970069960627
+  },
+  {
+   "nombre": "natillera=cumplo",
+   "media": 0.327448275862069,
+   "desviacion": 0.469282327066583,
+   "peso": 0.0007709191774390249
+  },
+  {
+   "nombre": "natillera=no",
+   "media": 0.5395862068965517,
+   "desviacion": 0.498430468795341,
+   "peso": 0.008456898907582418
+  },
+  {
+   "nombre": "personas_a_cargo",
+   "media": 1.5566896551724139,
+   "desviacion": 1.2760499693882459,
+   "peso": 0.7236653224047526
+  },
+  {
+   "nombre": "plan_celular=plan",
+   "media": 0.263448275862069,
+   "desviacion": 0.4405034413116113,
+   "peso": -0.023530692713133797
+  },
+  {
+   "nombre": "plan_celular=semana",
+   "media": 0.45462068965517244,
+   "desviacion": 0.49793645999527675,
+   "peso": -0.02413021685067758
+  },
+  {
+   "nombre": "plan_celular=veces",
+   "media": 0.28193103448275864,
+   "desviacion": 0.44993991407546874,
+   "peso": 0.049741454745382815
+  },
+  {
+   "nombre": "preferencia_tiempo=hoy",
+   "media": 0.42786206896551726,
+   "desviacion": 0.4947687529604757,
+   "peso": 0.05813152622960848
+  },
+  {
+   "nombre": "preferencia_tiempo=mes",
+   "media": 0.5721379310344827,
+   "desviacion": 0.4947687529604757,
+   "peso": -0.05813152622960848
+  },
+  {
+   "nombre": "ref_Administradora de la natillera",
+   "media": 0.09213793103448276,
+   "desviacion": 0.30500466069225113,
+   "peso": 0.01889521430256308
+  },
+  {
+   "nombre": "ref_Arrendador",
+   "media": 0.1619310344827586,
+   "desviacion": 0.3992912627207572,
+   "peso": -0.049636577298009986
+  },
+  {
+   "nombre": "ref_Cliente frecuente",
+   "media": 0.327448275862069,
+   "desviacion": 0.5382779429591535,
+   "peso": 0.07674768846332558
+  },
+  {
+   "nombre": "ref_Líder comunitario",
+   "media": 0.30317241379310345,
+   "desviacion": 0.520957610888304,
+   "peso": 0.057414506543779734
+  },
+  {
+   "nombre": "ref_Otro",
+   "media": 0.06675862068965517,
+   "desviacion": 0.25289736983025946,
+   "peso": -0.01399102923882025
+  },
+  {
+   "nombre": "ref_Proveedor",
+   "media": 0.21572413793103448,
+   "desviacion": 0.4404711346409013,
+   "peso": -0.10458343303711269
+  },
+  {
+   "nombre": "referencias",
+   "media": 1.1671724137931034,
+   "desviacion": 0.7826909404129566,
+   "peso": 0.009660915352726132
+  },
+  {
+   "nombre": "referencias_confirmadas",
+   "media": 0.6275862068965518,
+   "desviacion": 0.7134648587262981,
+   "peso": -0.42264804087354846
+  },
+  {
+   "nombre": "sector=artesanias",
+   "media": 0.04606896551724138,
+   "desviacion": 0.2096344817376488,
+   "peso": -0.0225664524147778
+  },
+  {
+   "nombre": "sector=belleza",
+   "media": 0.08606896551724139,
+   "desviacion": 0.2804658601185415,
+   "peso": 0.004038997894175031
+  },
+  {
+   "nombre": "sector=comidas_rapidas",
+   "media": 0.16027586206896552,
+   "desviacion": 0.3668617043342293,
+   "peso": -0.048133985534229706
+  },
+  {
+   "nombre": "sector=confeccion",
+   "media": 0.08717241379310345,
+   "desviacion": 0.28208754681231035,
+   "peso": -0.06991782001252886
+  },
+  {
+   "nombre": "sector=plaza_mercado",
+   "media": 0.07668965517241379,
+   "desviacion": 0.2660983877477465,
+   "peso": -0.022542197610754367
+  },
+  {
+   "nombre": "sector=reciclaje",
+   "media": 0.057931034482758624,
+   "desviacion": 0.2336129913479044,
+   "peso": 0.19819649204726433
+  },
+  {
+   "nombre": "sector=servicio_domestico",
+   "media": 0.08386206896551725,
+   "desviacion": 0.27718084774085683,
+   "peso": -0.025136523093538223
+  },
+  {
+   "nombre": "sector=tienda_barrio",
+   "media": 0.15255172413793103,
+   "desviacion": 0.35955485756762573,
+   "peso": -0.23877927220300696
+  },
+  {
+   "nombre": "sector=transporte_moto",
+   "media": 0.09213793103448276,
+   "desviacion": 0.2892205606438928,
+   "peso": 0.015238802086580393
+  },
+  {
+   "nombre": "sector=venta_ambulante",
+   "media": 0.15724137931034482,
+   "desviacion": 0.3640281966316965,
+   "peso": 0.24473590458348904
+  },
+  {
+   "nombre": "servicios=1a2",
+   "media": 0.23448275862068965,
+   "desviacion": 0.4236751049215909,
+   "peso": -0.14903899781326876
+  },
+  {
+   "nombre": "servicios=3mas",
+   "media": 0.1597241379310345,
+   "desviacion": 0.3663500207359382,
+   "peso": -0.10619506493204464
+  },
+  {
+   "nombre": "servicios=cortaron",
+   "media": 0.07724137931034483,
+   "desviacion": 0.2669740598496046,
+   "peso": 0.14242397582271646
+  },
+  {
+   "nombre": "servicios=noyo",
+   "media": 0.11089655172413793,
+   "desviacion": 0.31400399128010065,
+   "peso": 0.020828364585063236
+  },
+  {
+   "nombre": "servicios=siempre",
+   "media": 0.41765517241379313,
+   "desviacion": 0.49317271758461845,
+   "peso": 0.11656155859662168
+  },
+  {
+   "nombre": "tasa_ea",
+   "media": 0.32899862068965513,
+   "desviacion": 0.032494731639211905,
+   "peso": -0.028642914186305435
+  },
+  {
+   "nombre": "tiene_extracto",
+   "media": 0.41572413793103447,
+   "desviacion": 0.492846405153302,
+   "peso": -0.10878649261100881
+  },
+  {
+   "nombre": "variabilidad=algo",
+   "media": 0.4333793103448276,
+   "desviacion": 0.4955418082360652,
+   "peso": 0.031513798872984194
+  },
+  {
+   "nombre": "variabilidad=mucho",
+   "media": 0.2460689655172414,
+   "desviacion": 0.43071920055474194,
+   "peso": 0.09932507551246529
+  },
+  {
+   "nombre": "variabilidad=parecidos",
+   "media": 0.32055172413793104,
+   "desviacion": 0.4666886716968077,
+   "peso": -0.1251318610013609
+  }
+ ]
+}

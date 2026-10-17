@@ -1,0 +1,331 @@
+import "server-only";
+import { promises as fs } from "fs";
+import path from "path";
+import { Level, LEVEL_IDS, LEVELS } from "./config";
+import type { Installment } from "./finance";
+import type { AccountRole } from "./registration";
+import type { BrebKeyType } from "./breb-keys";
+import type { MLAssessment } from "./riesgo-ml";
+import type { DocKey, StudyAnswers, StudyResult } from "./scoring";
+import { demoUsers } from "./demo-accounts";
+
+// Persistencia mínima en un archivo JSON (suficiente para la demo; sin base de datos).
+
+export type TxKind = "deposito_ilp" | "retiro_ilp" | "desembolso_breb" | "pago_breb";
+
+export interface Tx {
+  id: string;
+  at: number;
+  kind: TxKind;
+  level: Level;
+  amountCop: number;
+  detail: string;
+  mode: "interledger" | "simulado";
+  /** Dueño del movimiento: wallet del inversionista o cédula del acreditado */
+  wallet?: string;
+  cedula?: string;
+  /** Retiro: de qué aportes salió (para devolverlo exacto si el envío falla) */
+  lots?: { id: string; amount: number; early: boolean }[];
+}
+
+/** "Cajita" del inversionista en un nivel de riesgo */
+export interface Position {
+  id: string;
+  wallet: string;
+  level: Level;
+  balance: number;
+  deposited: number;
+  withdrawn: number;
+  lastAccrualAt: number;
+  /** Cada aporte con su propio plazo (el balance de la cajita es la suma de sus valores) */
+  lots?: Lot[];
+  /** Formato anterior (un solo plazo por cajita): se convierte en un aporte al cargar */
+  lockedUntil?: number;
+  earlyWithdrawn?: number;
+}
+
+/** Un aporte a la cajita: renta a la tasa del nivel y tiene su propio plazo */
+export interface Lot {
+  id: string;
+  at: number;
+  principal: number;
+  /** Valor actual (capital + rendimiento − retiros) */
+  value: number;
+  /** Fin del plazo del nivel para este aporte. Antes, solo se puede sacar el 50 % */
+  maturesAt: number;
+  /** Lo retirado de este aporte antes de su plazo (cuenta para su tope del 50 %) */
+  earlyWithdrawn: number;
+}
+
+export interface Applicant {
+  cedula: string;
+  name: string;
+  score: number;
+  scoreLevel: Level | null;
+  recommendations: string[];
+  breakdown: StudyResult["breakdown"];
+  /** Cuota quincenal máxima según su capacidad de pago */
+  maxInstallment: number;
+  /** Nivel del modelo de riesgo: 1 a 3 reciben crédito, 4 = no apto por ahora */
+  riskLevel: StudyResult["riskLevel"];
+  backing: number;
+  alerts: string[];
+  review: boolean;
+  /** Ajuste del modelo de Machine Learning sobre el nivel de reglas (src/lib/riesgo-ml.ts) */
+  ml?: MLAssessment | null;
+  /** Nivel 4: razones y fecha (reloj de la demo) desde la que puede volver a solicitar */
+  reasons: string[];
+  retryAt?: number;
+  answers: StudyAnswers;
+  /** Rutas privadas de los documentos opcionales que adjuntó */
+  docs: Partial<Record<DocKey, string>>;
+  /** Créditos pagados completos y sin atrasos: cada uno sube un nivel */
+  paidOnTime: number;
+  evaluatedAt: number;
+}
+
+/** Estados del desembolso (en orden). Si la llave no se verifica, el crédito no se crea. */
+export const DISBURSEMENT_STATES = [
+  "CREDIT_APPROVED",
+  "BREB_KEY_VERIFIED",
+  "USER_CONFIRMED_BENEFICIARY",
+  "TREASURY_DEBITED",
+  "PAYOUT_SUBMITTED",
+  "DISBURSED",
+  /** La llave ya no está activa o cambió de titular al momento de desembolsar: no se paga */
+  "BREB_KEY_REJECTED",
+] as const;
+export type DisbursementState = (typeof DISBURSEMENT_STATES)[number];
+
+/** Payout de desembolso. Simulado: se arma el pedido exacto para Wompi, pero no se envía */
+export interface Payout {
+  id: string;
+  /** Referencia del lote e idempotency key: el id del crédito (si se reintenta, no se paga dos veces) */
+  reference: string;
+  idempotencyKey: string;
+  status: "SIMULATED_APPROVED";
+  /** Directorio Bre-B donde se re-verificó la llave justo antes del payout */
+  directory: "production" | "sandbox" | "simulado";
+  checkedAt: number;
+  beneficiary: { key: string; keyType: string; holderName: string; financialEntity: { name: string; code: string } };
+  amountCop: number;
+  /** Cuerpo que recibiría POST /payouts de Wompi (montos en centavos) */
+  request: { reference: string; transactions: { amount: number; name: string; email: string; key: string }[] };
+  submittedAt: number;
+}
+
+/** Resultado de consultar una llave en el directorio Bre-B: vale 5 minutos y solo para quien la verificó */
+export interface BrebVerification {
+  id: string;
+  userId: string;
+  key: string;
+  keyType: BrebKeyType;
+  holderName: string;
+  financialEntity: { name: string; code: string };
+  /** El titular enmascarado coincide con el nombre registrado */
+  nameMatches: boolean;
+  mode: "sandbox" | "production" | "simulado";
+  status: "VERIFIED" | "USED";
+  verifiedAt: number;
+  expiresAt: number;
+}
+
+export interface Loan {
+  id: string;
+  cedula: string;
+  name: string;
+  /** Llave verificada en el directorio Bre-B (no la que escribió el usuario) */
+  llaveBreb: string;
+  breb?: {
+    verificationId: string;
+    keyType: BrebKeyType;
+    holderName: string;
+    financialEntity: { name: string; code: string };
+    mode: BrebVerification["mode"];
+    verifiedAt: number;
+    confirmedAt: number;
+  };
+  disbursement?: {
+    state: DisbursementState;
+    history: { state: DisbursementState; at: number }[];
+    /** Referencia e idempotency key del payout: el id del crédito */
+    reference: string;
+    /** Por qué se bloqueó el desembolso */
+    rejectedReason?: string;
+  };
+  /** Payout Bre-B simulado: lo que se le enviaría a Wompi, sin mover dinero */
+  payout?: Payout;
+  level: Level;
+  rateEA: number;
+  amount: number;
+  installments: number;
+  schedule: Installment[];
+  /** en_espera incluye el desembolso en proceso; cancelado = la llave no pasó la verificación al desembolsar */
+  status: "en_espera" | "activo" | "pagado" | "cancelado";
+  createdAt: number;
+  disbursedAt?: number;
+}
+
+/** Pago de Open Payments esperando que el usuario lo apruebe en su wallet */
+export interface PendingPayment {
+  id: string;
+  kind: "deposit" | "withdraw";
+  wallet: string;
+  level: Level;
+  amountCop: number;
+  senderWallet: string;
+  senderResourceServer: string;
+  quoteId: string;
+  continueUri: string;
+  continueToken: string;
+  clientNonce?: string;
+  interactNonce?: string;
+  authServer?: string;
+  createdAt: number;
+}
+
+export interface User {
+  id: string;
+  role: AccountRole;
+  firstName: string;
+  lastName: string;
+  /** Nombre completo */
+  name: string;
+  email: string;
+  cedula: string;
+  phone: string;
+  nationality: string;
+  age: number;
+  sex: string;
+  address: string;
+  passwordHash: string;
+  salt: string;
+  /** Wallet address de Interledger (inversionista) */
+  wallet?: string;
+  investorProfile?: {
+    monthlyIncome: number;
+    currency: string;
+    incomeSource: string;
+    employment: "independiente" | "asalariado";
+  };
+  borrowerProfile?: {
+    incomeSource: string;
+    monthlyIncomeCop: number;
+    llaveBreb: string;
+  };
+  /** Rutas privadas (no públicas) de las copias del documento de identidad */
+  documents: { idFront: string; idBack: string };
+  /** La verificación facial aún no está implementada */
+  faceVerification: "pendiente" | "aprobada";
+  /** Hasta cuándo (reloj de la demo) vio sus notificaciones */
+  notificationsSeenAt?: number;
+  createdAt: number;
+}
+
+export interface Session {
+  token: string;
+  userId: string;
+  createdAt: number;
+}
+
+export interface Pool {
+  /** Dinero disponible para prestar o para retiros */
+  liquidity: number;
+  /** Capital actualmente prestado */
+  lent: number;
+}
+
+/**
+ * Permiso del operador para que la plataforma envíe pagos desde la bóveda sin aprobar cada retiro.
+ * Es un grant de Open Payments con un tope total (`limit`); el token se rota cuando vence.
+ */
+export interface VaultGrant {
+  accessToken: string;
+  manageUrl: string;
+  /** Cuándo vence el token (ms). null = el servidor no indicó vencimiento */
+  tokenExpiresAt: number | null;
+  limit: { value: string; assetCode: string; assetScale: number };
+  /** Lo que ya se envió con este permiso, en la unidad mínima del activo */
+  spent: string;
+  grantedAt: number;
+}
+
+/** Autorización de la bóveda esperando que el operador apruebe en la wallet */
+export interface PendingVaultGrant {
+  continueUri: string;
+  continueToken: string;
+  clientNonce: string;
+  interactNonce: string;
+  authServer: string;
+  limit: VaultGrant["limit"];
+  createdAt: number;
+}
+
+export interface DB {
+  users: User[];
+  sessions: Session[];
+  clockOffsetMs: number;
+  pools: Record<Level, Pool>;
+  positions: Position[];
+  applicants: Applicant[];
+  loans: Loan[];
+  txs: Tx[];
+  pending: PendingPayment[];
+  brebVerifications: BrebVerification[];
+  vaultGrant?: VaultGrant | null;
+  pendingVaultGrant?: PendingVaultGrant | null;
+}
+
+const DB_PATH = path.join(process.cwd(), "data", "db.json");
+
+export function emptyDB(): DB {
+  return {
+    users: [],
+    sessions: [],
+    clockOffsetMs: 0,
+    pools: Object.fromEntries(LEVEL_IDS.map((l) => [l, { liquidity: LEVELS[l].seed, lent: 0 }])) as Record<Level, Pool>,
+    positions: [],
+    applicants: [],
+    loans: [],
+    txs: [],
+    pending: [],
+    brebVerifications: [],
+  };
+}
+
+async function load(): Promise<DB> {
+  try {
+    const db = { ...emptyDB(), ...JSON.parse(await fs.readFile(DB_PATH, "utf8")) } as DB;
+    // Garantiza que existan las cuentas demo (también las que se agreguen después)
+    for (const demo of demoUsers()) if (!db.users.some((u) => u.id === demo.id)) db.users.push(demo);
+    return db;
+  } catch {
+    // Base nueva: arranca con las cuentas demo
+    return { ...emptyDB(), users: demoUsers() };
+  }
+}
+
+async function save(db: DB) {
+  await fs.mkdir(path.dirname(DB_PATH), { recursive: true });
+  await fs.writeFile(DB_PATH, JSON.stringify(db, null, 2));
+}
+
+let queue: Promise<unknown> = Promise.resolve();
+
+/** Ejecuta `fn` con acceso exclusivo a la base y guarda los cambios. */
+export function withDB<T>(fn: (db: DB) => T | Promise<T>): Promise<T> {
+  const run = queue.then(async () => {
+    const db = await load();
+    const result = await fn(db);
+    await save(db);
+    return result;
+  });
+  queue = run.catch(() => undefined);
+  return run;
+}
+
+export const readDB = () => withDB((db) => db);
+
+export const now = (db: DB) => Date.now() + db.clockOffsetMs;
+
+export const newId = () => crypto.randomUUID().slice(0, 8);
