@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useToast } from "@/components/feedback";
 import { Alert, Badge, Button, Card, EmptyState, MoneyInput, PageHeader, Spinner, Stat, api, fmtDate } from "@/components/ui";
 import { bankName } from "@/lib/breb-keys";
-import { LEVELS, MIN_PAYMENT, VAULT_BREB, type Level } from "@/lib/config";
+import { APP_NAME, LEVELS, MIN_PAYMENT, VAULT_BREB, type Level } from "@/lib/config";
 import type { Installment } from "@/lib/finance";
 import { cop, pct } from "@/lib/finance";
 
@@ -191,7 +191,7 @@ export default function MyCreditPage() {
           onPaid={(r, loan) => {
             void load();
             if (loan.status === "pagado") toast("success", "¡Crédito pagado!", "Tu historial mejora y puedes acceder a mejores condiciones.");
-            else toast("success", "Transferencia recibida", `${cop(r.amount)} llegaron a la bóveda de Kratos (${r.reference}).`);
+            else toast("success", "Transferencia recibida", `${cop(r.amount)} llegaron a la bóveda de ${APP_NAME} (${r.reference}).`);
           }}
         />
       )}
@@ -274,7 +274,7 @@ function StatusBadge({ loan }: { loan: LoanView }) {
 }
 
 /**
- * Simulador de la app del banco: el acreditado envía por Bre-B a la llave de Kratos, vinculada a la bóveda.
+ * Simulador de la app del banco: el acreditado envía por Bre-B a la llave de la plataforma, vinculada a la bóveda.
  * Pasos: datos (llave y monto) → confirmar → comprobante.
  */
 function BrebTransfer({ loan, onClose, onPaid }: { loan: LoanView; onClose: () => void; onPaid: (r: Receipt, loan: LoanView) => void }) {
@@ -342,7 +342,7 @@ function BrebTransfer({ loan, onClose, onPaid }: { loan: LoanView; onClose: () =
                 {keyFound ? (
                   <div className="rounded-lg bg-mint/10 px-3 py-2 text-xs">
                     <span className="font-medium text-mint">✓ {VAULT_BREB.holderName}</span>
-                    <span className="block text-muted">{VAULT_BREB.bank} · vinculada a la bóveda de Kratos</span>
+                    <span className="block text-muted">{VAULT_BREB.bank} · vinculada a la bóveda de {APP_NAME}</span>
                   </div>
                 ) : (
                   <p className="text-xs text-red-600 dark:text-red-400">
@@ -415,7 +415,7 @@ function BrebTransfer({ loan, onClose, onPaid }: { loan: LoanView; onClose: () =
                 <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-mint/15 text-2xl text-mint">✓</div>
                 <div className="font-semibold">Transferencia exitosa</div>
                 <div className="text-3xl font-semibold tabular-nums">{cop(receipt.amount)}</div>
-                <div className="text-xs text-muted">Llegó a la bóveda de Kratos al instante</div>
+                <div className="text-xs text-muted">Llegó a la bóveda de {APP_NAME} al instante</div>
               </div>
               <div className="space-y-2 rounded-lg bg-brand-soft p-3 text-sm">
                 <Line k="Referencia" v={receipt.reference} />

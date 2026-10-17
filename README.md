@@ -1,4 +1,4 @@
-# Kratos (nombre provisional) — MVP hackathon Interledger
+# La Bodeguita — MVP hackathon Interledger
 
 Plataforma colombiana que capta inversión extranjera por **Interledger (Open Payments)** para prestarle a personas no
 bancarizadas. El dinero se desembolsa y se recauda en pesos por **Bre-B**, y cada crédito pagado a tiempo construye historial.
@@ -19,7 +19,7 @@ Inversionista ──Interledger──▶ Bóveda (cajita por nivel) ──Bre-B�
 | Verificación de la llave Bre-B (titular y banco) | **Real** con el directorio Bre-B de Wompi (sandbox; simulado si no hay llaves) |
 | Desembolso (payout) por Bre-B | **Simulado con datos reales**: justo antes de pagar, la llave se re-verifica en el directorio Bre-B de producción (solo lectura) y se arma el payout exacto para Wompi (referencia e idempotency key = id del crédito, monto en centavos), pero **no se envía**. Ver `src/lib/payouts.ts` |
 | Lectura de documentos del estudio | **IA (Gemini)** con `GEMINI_API_KEY`: tipo de documento, ingreso del extracto, mora en la factura y señales de alteración (`src/lib/doc-reader.ts`). Sin llave, trucos en el nombre del archivo |
-| Pago de cuotas por Bre-B | **Simulador de banco** en `/mi-credito`: el acreditado transfiere (completo o abono parcial) a la llave `@kratosboveda`, vinculada a la bóveda; el dinero entra al pool del nivel (`VAULT_BREB` en `src/lib/config.ts`) |
+| Pago de cuotas por Bre-B | **Simulador de banco** en `/mi-credito`: el acreditado transfiere (completo o abono parcial) a la llave `@labodeguita`, vinculada a la bóveda; el dinero entra al pool del nivel (`VAULT_BREB` en `src/lib/config.ts`) |
 | Estudio de crédito, niveles, cuotas, fondeo | Funcional |
 
 ## Reglas de negocio (`src/lib/config.ts`)

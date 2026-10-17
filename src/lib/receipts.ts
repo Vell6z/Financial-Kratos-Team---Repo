@@ -1,6 +1,6 @@
 import "server-only";
 import { bankName, BREB_KEY_TYPES, type BrebKeyType } from "./breb-keys";
-import { EARLY_WITHDRAWAL_SHARE, LEVELS } from "./config";
+import { APP_NAME, APP_SLUG, EARLY_WITHDRAWAL_SHARE, LEVELS } from "./config";
 import { intervalLabel } from "./recurring-interval";
 import type { DB, Loan, Tx } from "./db";
 import { cop } from "./finance";
@@ -28,7 +28,7 @@ const rate = (v: number) => v.toLocaleString("es-CO", { maximumFractionDigits: v
 const FILE: Record<Tx["kind"], string> = { deposito_ilp: "inversion", retiro_ilp: "retiro", desembolso_breb: "desembolso", pago_breb: "pago" };
 
 export function receiptFileName(tx: Tx) {
-  return `kratos-${FILE[tx.kind]}-${tx.id}.pdf`;
+  return `${APP_SLUG}-${FILE[tx.kind]}-${tx.id}.pdf`;
 }
 
 /**
@@ -118,7 +118,7 @@ function investmentPdf(tx: Tx, now: number) {
   } else if (tx.mode === "interledger" && !r?.demo) {
     doc.paragraph("Pago anterior a la confirmación del cobro: no tiene datos de la wallet que recibe.", { size: 9, color: COLORS.muted, gap: 20 });
   }
-  return doc.build(`Comprobante ${tx.id} - Kratos`);
+  return doc.build(`Comprobante ${tx.id} - ${APP_NAME}`);
 }
 
 function disbursementPdf(tx: Tx, loan: Loan, now: number) {
@@ -148,7 +148,7 @@ function disbursementPdf(tx: Tx, loan: Loan, now: number) {
       "El payout se armó tal como se le enviaría a Wompi, pero no se envió: no se movió dinero real.",
     { size: 9, color: COLORS.muted, gap: 24 },
   );
-  return doc.build(`Desembolso ${tx.id} - Kratos`);
+  return doc.build(`Desembolso ${tx.id} - ${APP_NAME}`);
 }
 
 function paymentPdf(tx: Tx, loan: Loan, now: number) {
@@ -159,7 +159,7 @@ function paymentPdf(tx: Tx, loan: Loan, now: number) {
 
   doc.section("Transferencia");
   doc.row("De tu llave", b?.fromKey ?? loan.llaveBreb);
-  if (b) doc.row("Para", `${b.toKey} · bóveda de Kratos`);
+  if (b) doc.row("Para", `${b.toKey} · bóveda de ${APP_NAME}`);
   doc.row("Fecha", longDate(tx.at));
   doc.row("Crédito", `N.º ${loan.id} · ${loan.name}`);
 
@@ -183,5 +183,5 @@ function paymentPdf(tx: Tx, loan: Loan, now: number) {
     doc.row("Saldo del crédito después de este pago", cop(b.owedAfter), { bold: true });
   }
   doc.paragraph("Transferencia simulada en el sandbox de Bre-B: no se movió dinero real.", { size: 9, color: COLORS.muted, gap: 24 });
-  return doc.build(`Pago ${tx.id} - Kratos`);
+  return doc.build(`Pago ${tx.id} - ${APP_NAME}`);
 }

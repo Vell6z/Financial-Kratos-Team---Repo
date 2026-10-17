@@ -1,6 +1,8 @@
 // Reglas de negocio del MVP. Todo lo que el equipo todavía está definiendo vive aquí.
 
-export const APP_NAME = "Kratos"; // Nombre provisional
+export const APP_NAME = "La Bodeguita";
+/** Para nombres de archivo (PDF): sin espacios ni tildes */
+export const APP_SLUG = "labodeguita";
 
 export type Level = 1 | 2 | 3;
 export const LEVEL_IDS: Level[] = [1, 2, 3];
@@ -49,9 +51,9 @@ export const MAX_WITHDRAWAL_USD = 30_000;
  * El titular se muestra enmascarado como lo hace el directorio Bre-B.
  */
 export const VAULT_BREB = {
-  key: "@kratosboveda",
-  holderName: "KRA*** BOV*** S.A.S.",
-  bank: "Bóveda Kratos (sandbox)",
+  key: "@labodeguita",
+  holderName: "LA* BOD*** S.A.S.",
+  bank: "Bóveda La Bodeguita (sandbox)",
 };
 /** Abono mínimo por Bre-B, en pesos */
 export const MIN_PAYMENT = 1_000;

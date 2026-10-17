@@ -87,7 +87,7 @@ export interface BrebQr {
   merchantName: string | null;
   city: string | null;
   country: string | null;
-  /** Monto del QR (si trae). Para un crédito NO se usa: se desembolsa lo aprobado por Kratos */
+  /** Monto del QR (si trae). Para un crédito NO se usa: se desembolsa lo aprobado por la plataforma */
   amount: number | null;
   /** Todos los campos leídos, para mostrar cómo se interpretó */
   fields: { tag: string; value: string }[];

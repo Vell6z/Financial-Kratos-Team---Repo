@@ -1,4 +1,5 @@
 import "server-only";
+import { APP_NAME } from "./config";
 
 // Generador mínimo de PDF (sin dependencias) para los comprobantes.
 // Usa las fuentes estándar Helvetica y Helvetica-Bold con codificación WinAnsi (tildes y ñ incluidas).
@@ -123,7 +124,7 @@ export function buildPdf(pages: PdfPage[], info: { title: string }) {
   }
   objects[catalog - 1] = `<< /Type /Catalog /Pages ${pagesObj} 0 R >>`;
   objects[pagesObj - 1] = `<< /Type /Pages /Kids [${kids.map((k) => `${k} 0 R`).join(" ")}] /Count ${kids.length} >>`;
-  const infoObj = add(`<< /Title (${escape(encode(info.title))}) /Producer (Kratos) >>`);
+  const infoObj = add(`<< /Title (${escape(encode(info.title))}) /Producer (${escape(encode(APP_NAME))}) >>`);
 
   let out = "%PDF-1.4\n%\xe2\xe3\xcf\xd3\n";
   const offsets: number[] = [];

@@ -1,7 +1,8 @@
 import "server-only";
-import { A4, buildPdf, hex, PdfPage, wrap } from "./pdf";
+import { APP_NAME } from "./config";
+import { A4, buildPdf, hex, PdfPage, textWidth, wrap } from "./pdf";
 
-// Diseño común de los documentos PDF de Kratos (comprobantes, plan de pagos, paz y salvo):
+// Diseño común de los documentos PDF de la plataforma (comprobantes, plan de pagos, paz y salvo):
 // encabezado de marca, secciones con filas etiqueta → valor, tablas y pie de sandbox.
 
 export const COLORS = {
@@ -64,9 +65,9 @@ export class PdfDoc {
     const first = this.pages.length === 1;
     const h = first ? 96 : 56;
     this.page.rect(0, 0, A4.width, h, COLORS.brand);
-    this.page.text(M, first ? 44 : 34, "Kratos", { size: first ? 22 : 15, bold: true, color: COLORS.white });
+    this.page.text(M, first ? 44 : 34, APP_NAME, { size: first ? 22 : 15, bold: true, color: COLORS.white });
     if (first) this.page.text(M, 66, this.head.title, { size: 12, color: COLORS.white });
-    else this.page.text(M + 70, 34, this.head.title, { size: 10, color: COLORS.white });
+    else this.page.text(M + textWidth(APP_NAME, 15, true) + 12, 34, this.head.title, { size: 10, color: COLORS.white });
     this.page.text(A4.width - M, first ? 44 : 34, this.head.number, { size: 10, bold: true, color: COLORS.white, align: "right" });
     if (first) this.page.text(A4.width - M, 62, longDate(this.head.date), { size: 9, color: COLORS.white, align: "right" });
     this.y = first ? 140 : 90;
@@ -162,7 +163,7 @@ export class PdfDoc {
       const foot = A4.height - 60;
       page.line(M, foot, M + W, foot, COLORS.line);
       wrap(
-        `Kratos es un MVP de hackathon: todo corre en entornos de prueba (Interledger y Bre-B simulados) y no representa dinero real. Documento generado el ${longDate(this.now)}`,
+        `${APP_NAME} es un MVP de hackathon: todo corre en entornos de prueba (Interledger y Bre-B simulados) y no representa dinero real. Documento generado el ${longDate(this.now)}`,
         W - 50,
         8,
       ).forEach((l, j) => page.text(M, foot + 16 + j * 11, l, { size: 8, color: COLORS.muted }));

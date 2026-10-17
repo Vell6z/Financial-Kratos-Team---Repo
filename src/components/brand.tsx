@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { APP_NAME } from "@/lib/config";
 
-/** Marca provisional: rombo con los colores de la paleta (no es el logo de Interledger). */
+/** Marca: rombo con los colores de la paleta (no es el logo de Interledger). */
 export function Logo({ className = "" }: { className?: string }) {
   return (
     <Link href="/" className={`flex shrink-0 items-center gap-2 font-semibold tracking-tight ${className}`}>

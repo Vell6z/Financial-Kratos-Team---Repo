@@ -1,5 +1,5 @@
 import "server-only";
-import { INSTALLMENT_DAYS, LEVELS } from "./config";
+import { APP_NAME, APP_SLUG, INSTALLMENT_DAYS, LEVELS } from "./config";
 import type { Loan, Tx } from "./db";
 import { cop, periodRate } from "./finance";
 import { COLORS, longDate, PdfDoc, shortDate } from "./pdf-doc";
@@ -9,8 +9,8 @@ import { installmentDue } from "./services";
 
 const pct = (v: number, decimals = 0) => `${(v * 100).toLocaleString("es-CO", { maximumFractionDigits: decimals, minimumFractionDigits: decimals })} %`;
 
-export const planFileName = (loan: Loan) => `kratos-plan-de-pagos-${loan.id}.pdf`;
-export const releaseFileName = (loan: Loan) => `kratos-paz-y-salvo-${loan.id}.pdf`;
+export const planFileName = (loan: Loan) => `${APP_SLUG}-plan-de-pagos-${loan.id}.pdf`;
+export const releaseFileName = (loan: Loan) => `${APP_SLUG}-paz-y-salvo-${loan.id}.pdf`;
 
 /** Plan de pagos. `now`: hora de la demo, para marcar cuotas vencidas */
 export function buildPlanPdf(loan: Loan, now: number) {
@@ -70,11 +70,11 @@ export function buildPlanPdf(loan: Loan, now: number) {
     }),
   );
   doc.paragraph(
-    "Tarde: pagada después de su fecha de vencimiento. Puedes pagar o abonar en cualquier momento por Bre-B a la llave de Kratos. Los abonos se aplican primero a la cuota más antigua. " +
+    `Tarde: pagada después de su fecha de vencimiento. Puedes pagar o abonar en cualquier momento por Bre-B a la llave de ${APP_NAME}. Los abonos se aplican primero a la cuota más antigua. ` +
       "Pagar todas las cuotas a tiempo te sube un nivel para tu próximo crédito.",
     { size: 9, color: COLORS.muted, gap: 24 },
   );
-  return doc.build(`Plan de pagos ${loan.id} - Kratos`);
+  return doc.build(`Plan de pagos ${loan.id} - ${APP_NAME}`);
 }
 
 /** Paz y salvo de un crédito pagado. `payments`: los pagos Bre-B de ese crédito */
@@ -86,7 +86,7 @@ export function buildReleasePdf(loan: Loan, holder: { name: string; cedula: stri
 
   doc.paragraph("PAZ Y SALVO", { size: 18, bold: true, gap: 4 });
   doc.paragraph(
-    `Kratos certifica que ${holder.name}, identificado(a) con cédula de ciudadanía ${holder.cedula}, pagó la totalidad del crédito ` +
+    `${APP_NAME} certifica que ${holder.name}, identificado(a) con cédula de ciudadanía ${holder.cedula}, pagó la totalidad del crédito ` +
       `N.º ${loan.id} por ${cop(loan.amount)}, desembolsado el ${loan.disbursedAt ? longDate(loan.disbursedAt, false) : "—"}. ` +
       `A la fecha no tiene saldos pendientes por este crédito.`,
     { size: 11, gap: 20 },
@@ -103,6 +103,6 @@ export function buildReleasePdf(loan: Loan, holder: { name: string; cedula: stri
   });
 
   doc.paragraph(`Se expide a solicitud del titular el ${longDate(now, false)}.`, { size: 10, gap: 28 });
-  doc.signature("Kratos", "Plataforma de crédito · documento generado automáticamente");
-  return doc.build(`Paz y salvo ${loan.id} - Kratos`);
+  doc.signature(APP_NAME, "Plataforma de crédito · documento generado automáticamente");
+  return doc.build(`Paz y salvo ${loan.id} - ${APP_NAME}`);
 }

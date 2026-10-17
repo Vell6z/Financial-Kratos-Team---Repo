@@ -1,8 +1,8 @@
 @AGENTS.md
 
-# Kratos — contexto del proyecto
+# La Bodeguita — contexto del proyecto
 
-MVP de hackathon (Interledger) del equipo **Financial Kratos**. Plataforma de inclusión financiera en Colombia:
+**La Bodeguita** es el MVP de hackathon (Interledger) del equipo **Financial Kratos**. Plataforma de inclusión financiera en Colombia:
 
 - **Inversionistas** (nacionales o extranjeros) invierten por **Interledger / Open Payments** en "cajitas" tipo Nu que rentan con interés compuesto diario según un nivel de riesgo.
 - Ese capital financia **microcréditos a personas no bancarizadas** ("acreditados"), aprobados con un estudio de crédito propio (reglas + Machine Learning).
@@ -30,7 +30,7 @@ python3 ml/train_baseline.py   # entrena el modelo base y escribe ml/modelo/regr
 ## Mapa del código
 
 **Reglas y dominio (`src/lib/`)**
-- `config.ts` — reglas de negocio: niveles, tasas, techos, plazos, capital semilla, plazo y tope de retiros, llave Bre-B de la bóveda (`VAULT_BREB`). **Las reglas se cambian aquí.**
+- `config.ts` — nombre de la app (`APP_NAME`) y reglas de negocio: niveles, tasas, techos, plazos, capital semilla, plazo y tope de retiros, llave Bre-B de la bóveda (`VAULT_BREB`). **Las reglas se cambian aquí.** Los identificadores internos siguen con "kratos" (cookie `kratos_session`, correos `@demo.kratos.test`, paquete `kratos-credit`): cambiarlos cerraría sesiones y rompería las cuentas demo existentes.
 - `finance.ts` — tasa por periodo, interés compuesto, tabla de amortización francesa (una cuota cada 15 días), formato COP.
 - `db.ts` — tipos de la base y `withDB` / `readDB` / `now(db)`. `now(db)` es el reloj de la demo (el operador lo puede adelantar).
 - `services.ts` — lógica de negocio del servidor:
@@ -106,7 +106,7 @@ python3 ml/train_baseline.py   # entrena el modelo base y escribe ml/modelo/regr
 - La llave se verifica en el directorio antes de pedir el crédito. La verificación vale 5 minutos, es solo del usuario y se usa una vez.
 - El crédito usa la llave **guardada en el servidor**, nunca la del formulario.
 - Estados del desembolso: `CREDIT_APPROVED → BREB_KEY_VERIFIED → USER_CONFIRMED_BENEFICIARY → TREASURY_DEBITED → PAYOUT_SUBMITTED → DISBURSED`, o `BREB_KEY_REJECTED`, que devuelve el capital y deja el crédito cancelado.
-- Pagos del acreditado: transferencia simulada a la llave `@kratosboveda` (vinculada a la bóveda), con abonos parciales aplicados a la cuota más antigua.
+- Pagos del acreditado: transferencia simulada a la llave `@labodeguita` (vinculada a la bóveda), con abonos parciales aplicados a la cuota más antigua.
 
 ## Real vs. simulado
 
