@@ -12,8 +12,10 @@ import { demoUsers } from "./demo-accounts";
 import { updateDelinquency } from "./credit-history";
 import { seedDemoInvestments } from "./demo-seed";
 import { seedDemoBorrower } from "./demo-borrower-seed";
+import { isSupabaseEnabled, readState, writeState } from "./supabase";
 
-// Persistencia mínima en un archivo JSON (suficiente para la demo; sin base de datos).
+// Persistencia mínima: todo el estado en un JSON (suficiente para la demo).
+// Con SUPABASE_URL y SUPABASE_SERVICE_ROLE_KEY ese JSON vive en Supabase (src/lib/supabase.ts); sin ellas, en data/db.json.
 
 export type TxKind = "deposito_ilp" | "retiro_ilp" | "desembolso_breb" | "pago_breb";
 
@@ -453,38 +455,71 @@ export function emptyDB(): DB {
   };
 }
 
-async function load(): Promise<DB> {
-  let db: DB;
+/** Base guardada en el archivo local. null si todavía no existe. Cualquier otro error se lanza: nunca se arranca vacía por un archivo dañado */
+async function readLocalFile(): Promise<unknown | null> {
   try {
-    db = { ...emptyDB(), ...JSON.parse(await fs.readFile(DB_PATH, "utf8")) } as DB;
-  } catch {
-    // Base nueva: las cuentas demo se agregan abajo
-    db = emptyDB();
+    return JSON.parse(await fs.readFile(DB_PATH, "utf8"));
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") return null;
+    throw new Error(`No se pudo leer ${path.relative(process.cwd(), DB_PATH)}: ${(err as Error).message}`);
   }
-  // Garantiza que existan las cuentas demo (también las que se agreguen después) y sus inversiones precargadas.
-  // Va fuera del try: un error aquí no debe confundirse con una base nueva
+}
+
+/**
+ * Lee la base guardada (Supabase o archivo local). `version` es la de Supabase (null = la fila aún no existe).
+ * La primera vez con Supabase, si hay un data/db.json local, se usa como punto de partida (migración automática).
+ */
+async function readStored(): Promise<{ data: unknown | null; version: number | null }> {
+  if (isSupabaseEnabled()) {
+    const row = await readState();
+    if (row) return { data: row.data, version: row.version };
+    return { data: await readLocalFile(), version: null };
+  }
+  return { data: await readLocalFile(), version: null };
+}
+
+/** Guarda la base. Con Supabase devuelve false si alguien la cambió mientras tanto (hay que reintentar) */
+async function writeStored(db: DB, version: number | null): Promise<boolean> {
+  if (isSupabaseEnabled()) return writeState(db, version);
+  await fs.mkdir(path.dirname(DB_PATH), { recursive: true });
+  await fs.writeFile(DB_PATH, JSON.stringify(db, null, 2));
+  return true;
+}
+
+async function load() {
+  const stored = await readStored();
+  // Base nueva: las cuentas demo se agregan abajo
+  const db = { ...emptyDB(), ...((stored.data as Partial<DB> | null) ?? {}) } as DB;
+  // Lo que está guardado, para no reescribir la base si nada cambió (con Supabase, cada escritura viaja por la red)
+  const before = stored.data ? JSON.stringify(db) : null;
+  // Garantiza que existan las cuentas demo (también las que se agreguen después) y sus inversiones precargadas
   for (const demo of demoUsers()) if (!db.users.some((u) => u.id === demo.id)) db.users.push(demo);
   seedDemoInvestments(db, now(db));
   seedDemoBorrower(db, now(db));
   // Mora según el reloj de la demo: aviso del día 70, reporte simulado y castigo del día 90
   updateDelinquency(db, now(db));
-  return db;
+  return { db, before, version: stored.version };
 }
 
-async function save(db: DB) {
-  await fs.mkdir(path.dirname(DB_PATH), { recursive: true });
-  await fs.writeFile(DB_PATH, JSON.stringify(db, null, 2));
-}
+/** Intentos si otra instancia del servidor guardó al mismo tiempo (solo pasa con Supabase) */
+const MAX_ATTEMPTS = 5;
 
 let queue: Promise<unknown> = Promise.resolve();
 
-/** Ejecuta `fn` con acceso exclusivo a la base y guarda los cambios. */
+/**
+ * Ejecuta `fn` con acceso exclusivo a la base y guarda los cambios.
+ * Dentro de este proceso las llamadas van en fila. Entre varios servidores (Supabase) se usa la versión de la fila:
+ * si otro guardó primero, se vuelve a leer y `fn` se ejecuta de nuevo. Por eso `fn` no debe llamar servicios externos.
+ */
 export function withDB<T>(fn: (db: DB) => T | Promise<T>): Promise<T> {
   const run = queue.then(async () => {
-    const db = await load();
-    const result = await fn(db);
-    await save(db);
-    return result;
+    for (let attempt = 1; ; attempt++) {
+      const { db, before, version } = await load();
+      const result = await fn(db);
+      if (before !== null && JSON.stringify(db) === before) return result;
+      if (await writeStored(db, version)) return result;
+      if (attempt >= MAX_ATTEMPTS) throw new Error("La base está ocupada en este momento. Intenta de nuevo en unos segundos.");
+    }
   });
   queue = run.catch(() => undefined);
   return run;

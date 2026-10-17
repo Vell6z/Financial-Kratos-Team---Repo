@@ -1,7 +1,6 @@
-import { promises as fs } from "fs";
-import path from "path";
 import { handle } from "@/lib/api";
 import { checkRegistration, register, setSessionCookie, toPublic } from "@/lib/auth";
+import { removeUploads, saveUpload } from "@/lib/uploads";
 import type { FaceCheck } from "@/lib/db";
 import { newId, withDB } from "@/lib/db";
 import {
@@ -51,16 +50,20 @@ export async function POST(request: Request) {
       if (!liveness.ok) throw new BusinessError(liveness.message ?? "No pudimos confirmar que eres una persona real. Repite la verificación facial.");
     }
 
-    // Las copias del documento se guardan fuera de /public: no quedan expuestas en la web
+    // Las copias del documento van a almacenamiento privado (bucket de Supabase o data/uploads): no quedan expuestas en la web
     const id = newId();
-    const dir = path.join(process.cwd(), "data", "uploads", id);
-    await fs.mkdir(dir, { recursive: true });
     const documents = { idFront: "", idBack: "" };
-    for (const key of ["idFront", "idBack"] as const) {
-      const f = files[key] as File;
-      const file = path.join(dir, `${key}.${EXT[f.type]}`);
-      await fs.writeFile(file, Buffer.from(await f.arrayBuffer()));
-      documents[key] = path.relative(process.cwd(), file);
+    const saved: string[] = [];
+    try {
+      for (const key of ["idFront", "idBack"] as const) {
+        const f = files[key] as File;
+        const objectKey = `${id}/${key}.${EXT[f.type]}`;
+        documents[key] = await saveUpload(objectKey, new Uint8Array(await f.arrayBuffer()), f.type);
+        saved.push(objectKey);
+      }
+    } catch (err) {
+      await removeUploads(saved);
+      throw err;
     }
 
     try {
@@ -104,7 +107,7 @@ export async function POST(request: Request) {
       await setSessionCookie(token);
       return toPublic(user);
     } catch (err) {
-      await fs.rm(dir, { recursive: true, force: true });
+      await removeUploads(saved);
       throw err;
     }
   });

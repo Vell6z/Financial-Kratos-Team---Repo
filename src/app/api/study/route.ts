@@ -1,7 +1,6 @@
-import { promises as fs } from "fs";
-import path from "path";
 import { handle } from "@/lib/api";
 import { requireRole, requireUser } from "@/lib/auth";
+import { saveUpload } from "@/lib/uploads";
 import { withDB } from "@/lib/db";
 import { readDocuments, type UploadedDoc } from "@/lib/doc-reader";
 import { validateIdFile } from "@/lib/registration";
@@ -50,17 +49,9 @@ export async function POST(request: Request) {
 
     const uploads: UploadedDoc[] = await Promise.all(files.map(async ([key, f]) => ({ key, name: f.name, mime: f.type, bytes: Buffer.from(await f.arrayBuffer()) })));
 
-    // Los documentos se guardan fuera de /public: no quedan expuestos en la web
+    // Los documentos van a almacenamiento privado (bucket de Supabase o data/uploads): no quedan expuestos en la web
     const docs: Partial<Record<DocKey, string>> = {};
-    if (uploads.length) {
-      const dir = path.join(process.cwd(), "data", "uploads", user.id, "estudio");
-      await fs.mkdir(dir, { recursive: true });
-      for (const u of uploads) {
-        const file = path.join(dir, `${u.key}.${EXT[u.mime]}`);
-        await fs.writeFile(file, u.bytes);
-        docs[u.key] = path.relative(process.cwd(), file);
-      }
-    }
+    for (const u of uploads) docs[u.key] = await saveUpload(`${user.id}/estudio/${u.key}.${EXT[u.mime]}`, new Uint8Array(u.bytes), u.mime);
 
     // Lectura con IA (Gemini) si hay GEMINI_API_KEY; si no, trucos en el nombre del archivo
     const readings = await readDocuments(uploads);
