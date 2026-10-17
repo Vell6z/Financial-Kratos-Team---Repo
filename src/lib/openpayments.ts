@@ -51,7 +51,10 @@ function normalizePem(raw: string) {
  */
 function platformPrivateKey(): KeyObject {
   const file = process.env.OP_PRIVATE_KEY_PATH?.trim();
-  if (file && existsSync(resolvePath(process.cwd(), file))) return createPrivateKey(readFileSync(resolvePath(process.cwd(), file)));
+  // turbopackIgnore: es una ruta local de desarrollo. Sin esto, Next empaqueta TODO el proyecto (incluidos secrets/ y .env)
+  // en las funciones del servidor al no poder saber qué archivo se lee
+  const keyPath = file ? resolvePath(/* turbopackIgnore: true */ process.cwd(), file) : null;
+  if (keyPath && existsSync(keyPath)) return createPrivateKey(readFileSync(keyPath));
   const raw = process.env.OP_PRIVATE_KEY || process.env.OP_PRIVATE_KEY_BASE64;
   if (!raw)
     throw new Error(

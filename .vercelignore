@@ -1,0 +1,11 @@
+# Lo que `vercel` NO sube al desplegar desde esta carpeta. En Vercel, los secretos van como variables de entorno.
+.env
+.env.*
+!.env.example
+secrets/
+certificates/
+data/
+.next/
+node_modules/
+*.key
+*.pem
