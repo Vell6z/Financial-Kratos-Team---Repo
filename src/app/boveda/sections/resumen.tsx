@@ -172,6 +172,16 @@ export function SummarySection({ state, busy, act, reload, go }: { state: State;
               Reiniciar demo
             </Button>
           </div>
+          {!state.demoDayLoaded && (
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-brand-soft p-3 text-sm">
+              <span>
+                <b>Un día promedio:</b> 4 inversionistas de otros países y 8 acreditados (al día, por pagar, en mora, crédito nuevo y crédito pagado hoy), con su historia.
+              </span>
+              <Button disabled={busy} onClick={() => act({ action: "seed-day" }, { title: "Día de demo cargado", text: "Nuevos inversionistas, acreditados y créditos con su historia." })}>
+                Cargar un día de demo
+              </Button>
+            </div>
+          )}
         </Card>
       </div>
 
@@ -227,7 +237,7 @@ export function SummarySection({ state, busy, act, reload, go }: { state: State;
         }}
         onCancel={() => setConfirmReset(false)}
       >
-        Se borrarán todas las inversiones, créditos y movimientos, y se vuelven a precargar los datos de las cuentas demo. Las cuentas y la bitácora se conservan.
+        Se borrarán todas las inversiones, créditos y movimientos, y se vuelven a precargar los datos de las cuentas demo y el día de demo con la fecha de hoy. Las cuentas y la bitácora se conservan.
       </ConfirmDialog>
 
       <ConfirmDialog

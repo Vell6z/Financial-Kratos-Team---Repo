@@ -2,6 +2,7 @@ import { handle } from "@/lib/api";
 import { actorOf, audit, requestIp } from "@/lib/audit";
 import { requireAdmin, requireUser } from "@/lib/auth";
 import { emptyDB, withDB } from "@/lib/db";
+import { demoDayLoaded, seedDemoDay } from "@/lib/demo-day-seed";
 import { cancelRecurring, processRecurring } from "@/lib/recurring";
 import { accrueAll, BusinessError } from "@/lib/services";
 
@@ -57,8 +58,16 @@ export async function POST(request: Request) {
           auditFormat: db.auditFormat,
           demoSeeded: undefined,
           demoBorrowerSeeded: undefined,
+          demoDaySeeded: undefined,
         });
         audit(db, { category: "demo", action: "demo_reiniciada", actor, entity: { type: "demo", id: "base" }, summary: "Reinició la demo: se borraron inversiones, créditos y movimientos", ip });
+        // Vuelve a cargar el día de demo con la fecha de hoy
+        const r = seedDemoDay(db);
+        audit(db, { category: "demo", action: "dia_demo_cargado", actor, entity: { type: "demo", id: "dia" }, summary: `Cargó el día de demo: ${r.investors} inversionistas, ${r.borrowers} acreditados y ${r.loans} créditos`, ip });
+      } else if (action === "seed-day") {
+        if (demoDayLoaded(db)) throw new BusinessError("El día de demo ya está cargado. Reinicia la demo para volver a cargarlo con la fecha de hoy.");
+        const r = seedDemoDay(db);
+        audit(db, { category: "demo", action: "dia_demo_cargado", actor, entity: { type: "demo", id: "dia" }, summary: `Cargó el día de demo: ${r.investors} inversionistas, ${r.borrowers} acreditados y ${r.loans} créditos`, ip });
       } else if (action === "face-approve" || action === "face-reject") {
         const user = target();
         if (user.faceVerification !== "pendiente") throw new BusinessError("Esta verificación facial ya se resolvió");

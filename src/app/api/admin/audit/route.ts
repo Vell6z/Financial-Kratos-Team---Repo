@@ -32,7 +32,8 @@ export async function GET(request: Request) {
             !text ||
             [e.summary, e.action, e.actor.name ?? "", e.entity?.id ?? "", e.data ? JSON.stringify(e.data) : ""].some((s) => s.toLowerCase().includes(text)),
         )
-        .reverse();
+        // Más recientes primero por hora (los datos de demostración con historia se agregan después con fechas pasadas)
+        .sort((x, y) => y.at - x.at || y.seq - x.seq);
       if (csv)
         audit(db, {
           category: "operador",

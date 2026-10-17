@@ -61,6 +61,7 @@ export interface UserRow {
 export interface State {
   now: number;
   clockOffsetDays: number;
+  demoDayLoaded: boolean;
   interledger: boolean;
   vaultGrant: { grantedAt: number; assetCode: string; limit: number; spent: number } | null;
   pools: Record<Level, { liquidity: number; lent: number }>;

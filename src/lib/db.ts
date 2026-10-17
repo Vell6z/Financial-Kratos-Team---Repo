@@ -423,6 +423,8 @@ export interface PendingVaultGrant {
 export interface DB {
   /** Bitácora de auditoría encadenada por hash (src/lib/audit.ts) */
   audit?: AuditEvent[];
+  /** Versión del día de demo cargado (src/lib/demo-day-seed.ts) */
+  demoDaySeeded?: number;
   /** Formato del hash de la bitácora (src/lib/audit.ts, AUDIT_FORMAT) */
   auditFormat?: number;
   users: User[];

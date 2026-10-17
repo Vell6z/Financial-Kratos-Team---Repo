@@ -179,7 +179,9 @@ Ya vienen con datos para mostrar todo sin esperar:
 El operador entra a `/boveda`, organizado en secciones: **Resumen** (alertas, indicadores de cartera y mora, pools con encaje,
 bóveda y controles de demo), **Cartera**, **Usuarios** (verificación de identidad, suspender y reactivar cuentas), **Inversiones**
 (cajitas y recurrentes), **Movimientos** y **Auditoría**. La bitácora registra quién hizo qué y cuándo en todos los flujos y está
-encadenada por hash (si alguien edita o borra un evento, el panel lo detecta); todo se exporta a CSV. **Reiniciar demo** borra inversiones, créditos y movimientos, y vuelve a cargar los datos demo con la fecha de
+encadenada por hash (si alguien edita o borra un evento, el panel lo detecta); todo se exporta a CSV. **Cargar un día de demo** agrega 4
+inversionistas y 8 acreditados ficticios en las situaciones de un día normal (pagos, cuota por pagar, mora, crédito nuevo y
+crédito pagado hoy); **Reiniciar demo** lo vuelve a cargar con la fecha del día. **Reiniciar demo** borra inversiones, créditos y movimientos, y vuelve a cargar los datos demo con la fecha de
 hoy (conserva las cuentas y el permiso de la bóveda). **+15 días / +1 año** adelanta el reloj para ver crecer las cajitas y vencer
 cuotas.
 

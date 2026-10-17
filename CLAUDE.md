@@ -62,6 +62,7 @@ python3 ml/train_baseline.py   # entrena el modelo base y escribe ml/modelo/regr
   - `receipts.ts`: comprobante de cada movimiento (inversión, retiro, desembolso, pago) en `/api/receipts/[id]`;
   - `credit-docs.ts`: plan de pagos (`/api/loans/[id]/plan`), paz y salvo (`/api/loans/[id]/paz-y-salvo`, solo con el crédito pagado) y certificado de historial crediticio (`/api/credit-history`, lo solicita el acreditado desde `/mi-credito`), con velocímetro de puntaje 300–850 (`creditScore` en `credit-history.ts`: interno, explica el nivel pero no lo decide);
   - `pdf-response.ts`: responde el PDF (con `?descargar` lo baja como archivo).
+- `demo-day-seed.ts` — **un día promedio** para el pitch: 4 inversionistas ficticios de otros países y 8 acreditados (al día, cuota por pagar hoy, mora de 9, 40 y 75 días, crédito pagado hoy, crédito desembolsado hoy, estudio recién hecho), con meses de historia. Usa los servicios reales moviendo el reloj (pools, comprobantes, mora y bitácora coherentes; los eventos toman la hora real equivalente). Se carga con "Cargar un día de demo" en `/boveda` y al reiniciar la demo. Correos `@demo.labodeguita.test`, sin datos reales.
 - `demo-seed.ts` — inversiones precargadas de la cuenta demo de inversionista (una sola vez, `db.demoSeeded`).
 - `demo-accounts.ts` — cuentas demo (inversionista, acreditado, operador). **Sus credenciales viven solo ahí: no repetirlas en chats, docs ni commits nuevos.**
 

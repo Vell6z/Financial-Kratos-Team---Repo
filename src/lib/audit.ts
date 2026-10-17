@@ -81,6 +81,20 @@ export function requestIp(request?: Request) {
   return h?.get("x-forwarded-for")?.split(",")[0].trim() || h?.get("x-real-ip") || undefined;
 }
 
+/**
+ * Al sembrar datos de demostración con historia (src/lib/demo-day-seed.ts) el reloj de la demo se mueve al pasado:
+ * los eventos toman la hora real equivalente (lo que se movió el reloj respecto de `baseOffset`, el desfase normal).
+ */
+let simulatedBase: number | null = null;
+export function withSimulatedAuditClock<T>(baseOffset: number, fn: () => T): T {
+  simulatedBase = baseOffset;
+  try {
+    return fn();
+  } finally {
+    simulatedBase = null;
+  }
+}
+
 /** Agrega un evento a la bitácora. Llamar DENTRO de withDB, en la misma transacción del cambio que registra */
 export function audit(
   db: DB,
@@ -88,10 +102,11 @@ export function audit(
 ) {
   const log = (db.audit ??= []);
   const last = log.at(-1);
+  const at = simulatedBase !== null ? Date.now() + db.clockOffsetMs - simulatedBase : Date.now();
   const base: Omit<AuditEvent, "hash"> = {
     id: crypto.randomUUID().slice(0, 8),
     seq: (last?.seq ?? 0) + 1,
-    at: Date.now(),
+    at,
     demoAt: Date.now() + db.clockOffsetMs,
     category: e.category,
     action: e.action,
@@ -118,21 +133,24 @@ export function migrateAuditFormat(db: DB) {
     db.auditFormat = AUDIT_FORMAT;
     return;
   }
+  db.auditFormat = AUDIT_FORMAT;
+  resealAudit(db, `Se volvió a sellar la bitácora con el formato ${AUDIT_FORMAT} del hash (JSON canónico)`);
+}
+
+/**
+ * Vuelve a sellar toda la cadena (después de una corrección documentada) y deja un evento con el motivo.
+ * Rompe la evidencia de lo anterior a propósito: usar solo para correcciones explicadas, nunca para ocultar cambios.
+ */
+export function resealAudit(db: DB, reason: string) {
   let prev = GENESIS;
-  for (const e of db.audit) {
+  for (const e of db.audit ?? []) {
     e.prevHash = prev;
     const { hash: _old, ...rest } = e;
     void _old;
     e.hash = digest(rest);
     prev = e.hash;
   }
-  db.auditFormat = AUDIT_FORMAT;
-  audit(db, {
-    category: "operador",
-    action: "bitacora_resellada",
-    actor: SYSTEM,
-    summary: `Se volvió a sellar la bitácora con el formato ${AUDIT_FORMAT} del hash (JSON canónico): ${db.audit.length} eventos`,
-  });
+  audit(db, { category: "operador", action: "bitacora_resellada", actor: SYSTEM, summary: `${reason}: ${db.audit?.length ?? 0} eventos` });
 }
 
 /**

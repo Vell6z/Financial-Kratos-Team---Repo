@@ -38,7 +38,14 @@ const DISBURSEMENT_LABEL: Record<string, string> = {
 
 function LoanStatus({ l }: { l: LoanRow }) {
   if (l.chargedOffAt && l.status === "activo") return <Badge tone="bad">Castigado · {l.daysLate} d</Badge>;
-  if (l.status === "activo") return l.overdue ? <Badge tone="bad">Mora · {l.daysLate} d</Badge> : <Badge tone="good">Al día</Badge>;
+  if (l.status === "activo")
+    return l.overdue ? (
+      <Badge tone="bad">Mora · {l.daysLate} d</Badge>
+    ) : l.schedule.some((i) => i.state === "POR_PAGAR") ? (
+      <Badge tone="warn">Cuota por pagar</Badge>
+    ) : (
+      <Badge tone="good">Al día</Badge>
+    );
   if (l.status === "pagado") return <Badge tone="good">Pagado</Badge>;
   if (l.status === "en_espera") return <Badge tone="warn">En espera</Badge>;
   return <Badge>No desembolsado</Badge>;

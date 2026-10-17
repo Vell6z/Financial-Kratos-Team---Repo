@@ -3,6 +3,7 @@ import { verifyAuditChain } from "@/lib/audit";
 import { requireAdmin, requireUser } from "@/lib/auth";
 import { applicantLevel, creditScore } from "@/lib/credit-history";
 import { now, withDB } from "@/lib/db";
+import { demoDayLoaded } from "@/lib/demo-day-seed";
 import { isInterledgerEnabled } from "@/lib/openpayments";
 import { processPayouts } from "@/lib/payouts";
 import { processRecurring, recurringView } from "@/lib/recurring";
@@ -32,6 +33,7 @@ export async function GET() {
       return {
         now: t,
         clockOffsetDays: Math.round(db.clockOffsetMs / 86_400_000),
+        demoDayLoaded: demoDayLoaded(db),
         interledger: isInterledgerEnabled(),
         // Permiso de retiros automáticos (sin el token)
         vaultGrant: db.vaultGrant
@@ -135,7 +137,7 @@ export async function GET() {
             reason: u.faceCheck!.reviewReason ?? (u.faceCheck!.dedupDistance !== null ? "parecido" : "sin_camara"),
           })),
         // Bitácora: integridad de la cadena y últimos eventos (la lista completa en /api/admin/audit)
-        audit: { total: audit.length, broken: verifyAuditChain(audit), latest: audit.slice(-8).reverse() },
+        audit: { total: audit.length, broken: verifyAuditChain(audit), latest: [...audit].sort((x, y) => y.at - x.at || y.seq - x.seq).slice(0, 8) },
       };
     });
   });
