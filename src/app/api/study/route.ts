@@ -3,6 +3,7 @@ import path from "path";
 import { handle } from "@/lib/api";
 import { requireRole, requireUser } from "@/lib/auth";
 import { now, withDB } from "@/lib/db";
+import { readDocuments, type UploadedDoc } from "@/lib/doc-reader";
 import { validateIdFile } from "@/lib/registration";
 import { DOC_KEYS, DOCS, type DocKey, type StudyAnswers } from "@/lib/scoring";
 import { BusinessError, saveStudy, studyView } from "@/lib/services";
@@ -47,20 +48,23 @@ export async function POST(request: Request) {
       return u;
     });
 
+    const uploads: UploadedDoc[] = await Promise.all(files.map(async ([key, f]) => ({ key, name: f.name, mime: f.type, bytes: Buffer.from(await f.arrayBuffer()) })));
+
     // Los documentos se guardan fuera de /public: no quedan expuestos en la web
     const docs: Partial<Record<DocKey, string>> = {};
-    // La lectura de documentos es simulada: el modelo usa el nombre original del archivo (trucos de demo)
-    const docNames = Object.fromEntries(files.map(([k, f]) => [k, f.name])) as Partial<Record<DocKey, string>>;
-    if (files.length) {
+    if (uploads.length) {
       const dir = path.join(process.cwd(), "data", "uploads", user.id, "estudio");
       await fs.mkdir(dir, { recursive: true });
-      for (const [key, f] of files) {
-        const file = path.join(dir, `${key}.${EXT[f.type]}`);
-        await fs.writeFile(file, Buffer.from(await f.arrayBuffer()));
-        docs[key] = path.relative(process.cwd(), file);
+      for (const u of uploads) {
+        const file = path.join(dir, `${u.key}.${EXT[u.mime]}`);
+        await fs.writeFile(file, u.bytes);
+        docs[u.key] = path.relative(process.cwd(), file);
       }
     }
 
-    return withDB((db) => saveStudy(db, user.cedula, user.name, user.age, answers, docs, docNames));
+    // Lectura con IA (Gemini) si hay GEMINI_API_KEY; si no, trucos en el nombre del archivo
+    const readings = await readDocuments(uploads);
+
+    return withDB((db) => saveStudy(db, user.cedula, user.name, user.age, answers, docs, readings));
   });
 }

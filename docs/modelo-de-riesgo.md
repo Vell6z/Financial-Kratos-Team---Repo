@@ -201,7 +201,7 @@ Las diferencias de 1 a 3 puntos frente al documento del equipo vienen de las res
 | Puntaje, nivel, cupo, cuotas y plan de pagos | **Real** (servidor) |
 | Mora con la plataforma | **Real** (créditos con cuotas vencidas en la base) |
 | Guardar el perfil | **Real** (`data/db.json`, documentos en `data/uploads/`) |
-| Lectura de documentos | **Simulada**: subir el archivo cuenta como documento |
+| Lectura de documentos | **Con IA (Gemini)** si hay `GEMINI_API_KEY`: valida el tipo, lee el ingreso del extracto (cruce X2) y la mora de la factura (cruce X1), y detecta alteraciones (alterado con confianza ≥ 0,8 → exclusión; con duda o PDF editado con iLovePDF, Word, etc. → el documento no cuenta). Sin llave: trucos en el nombre |
 | Confirmación de referencias | **Simulada**: si marca "enviarle un mensaje", se da por confirmada |
 
 **Trucos para la demo** (en el nombre del archivo):

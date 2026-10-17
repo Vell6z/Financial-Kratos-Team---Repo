@@ -1,6 +1,6 @@
 import { INSTALLMENT_DAYS, LEVELS, type Level } from "./config";
 import { buildSchedule } from "./finance";
-import { creditLimit, type DocKey, type RiskLevel, type StudyAnswers } from "./scoring";
+import { creditLimit, type DocKey, type DocReading, type RiskLevel, type StudyAnswers } from "./scoring";
 import model from "../../ml/modelo/regresion_logistica.json";
 
 // Modelo de Machine Learning que ajusta el nivel del estudio (solo en el servidor).
@@ -124,15 +124,14 @@ export function predictDefault(r: MLRecord) {
 /** Arma la solicitud con las respuestas del estudio y un crédito de referencia del nivel */
 export function recordFromStudy(
   a: StudyAnswers,
-  docNames: Partial<Record<DocKey, string>>,
+  docs: Partial<Record<DocKey, DocReading>>,
   age: number,
   loan: { level: Level; amount: number; installments: number },
 ): MLRecord {
   const income = Number(a.income);
   const free = income - Number(a.expenses) - Number(a.debts);
-  const names = Object.values(docNames).map((n) => (n ?? "").toLowerCase());
-  const altered = names.some((n) => n.includes("alterad"));
-  const extract = docNames.extracto?.toLowerCase().match(/extracto[_-]?(\d{4,})/)?.[1];
+  const altered = Object.values(docs).some((d) => d?.altered);
+  const extract = docs.extracto?.valid ? docs.extracto.monthlyIncome : null;
   const refs = a.references.filter((r) => r.name.trim() && r.phone.trim() && r.relation);
   const payment = buildSchedule(loan.amount, LEVELS[loan.level].rateEA, loan.installments, 0)[0].payment;
   const r: MLRecord = {
@@ -157,8 +156,8 @@ export function recordFromStudy(
     referencias: refs.length,
     referencias_confirmadas: refs.filter((x) => x.notify).length,
     referencias_relaciones: refs.map((x) => x.relation).join("|"),
-    ingreso_extracto: extract && !altered ? Number(extract) : "",
-    factura_con_mora: docNames.factura?.toLowerCase().includes("mora") ? 1 : 0,
+    ingreso_extracto: extract && !altered ? extract : "",
+    factura_con_mora: docs.factura?.hasOverdue ? 1 : 0,
     doc_alterado: altered ? 1 : 0,
     monto: loan.amount,
     cuotas: loan.installments,
@@ -169,7 +168,7 @@ export function recordFromStudy(
   // Oficio "Otro" no estaba en el entrenamiento: se trata como sin dato
   if (a.sector !== "otro") r.sector = a.sector;
   a.likert.forEach((v, i) => (r[`likert_${i + 1}`] = v ?? 3));
-  for (const k of ["extracto", "factura", "arriendo", "recargas", "libreta", "pazysalvo"] as DocKey[]) r[`doc_${k}`] = docNames[k] ? 1 : 0;
+  for (const k of ["extracto", "factura", "arriendo", "recargas", "libreta", "pazysalvo"] as DocKey[]) r[`doc_${k}`] = docs[k] && (docs[k]!.valid || docs[k]!.altered) ? 1 : 0; // como en el dataset: alterado cuenta como subido
   return r;
 }
 
@@ -193,13 +192,13 @@ export function referenceLoan(level: Level, maxInstallment: number) {
 /** Ajusta el nivel de reglas con el modelo. Nunca sube a quien las reglas dejaron en nivel 4. */
 export function assessWithML(
   a: StudyAnswers,
-  docNames: Partial<Record<DocKey, string>>,
+  docs: Partial<Record<DocKey, DocReading>>,
   age: number,
   rulesLevel: RiskLevel,
   maxInstallment: number,
 ): MLAssessment | null {
   if (rulesLevel === 4) return null;
-  const p = predictDefault(recordFromStudy(a, docNames, age, referenceLoan(rulesLevel, maxInstallment)));
+  const p = predictDefault(recordFromStudy(a, docs, age, referenceLoan(rulesLevel, maxInstallment)));
   const adjustment = p.probability > ML_POLICY.downgradeAbove ? -1 : p.probability < ML_POLICY.upgradeBelow && rulesLevel > 1 ? 1 : 0;
   return { probability: p.probability, rulesLevel, adjustment, against: p.against, inFavor: p.inFavor };
 }

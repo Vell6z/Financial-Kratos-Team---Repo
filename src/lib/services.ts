@@ -3,7 +3,7 @@ import { DAY_MS, EARLY_WITHDRAWAL_SHARE, INSTALLMENT_DAYS, investmentTermDays, L
 import { Applicant, DB, DisbursementState, Loan, Lot, Payout, Position, Tx, TxKind, newId, now } from "./db";
 import { accrue, buildSchedule, cop } from "./finance";
 import { assessWithML, mlHint } from "./riesgo-ml";
-import { CONFIG, computeStudy, creditLimit, type DocKey, type RiskLevel, type StudyAnswers } from "./scoring";
+import { CONFIG, computeStudy, creditLimit, DOCS, type DocKey, type DocReading, type RiskLevel, type StudyAnswers } from "./scoring";
 import { validateMoney } from "./validators";
 
 /** Máximo por retiro en pesos (lo calcula la ruta con la tasa del dólar: fx.maxWithdrawalCop) */
@@ -192,7 +192,7 @@ export function effectiveLevel(scoreLevel: Level | null, paidOnTime: number): Le
   return Math.max(1, scoreLevel - paidOnTime) as Level;
 }
 
-/** Guarda el estudio de crédito del acreditado y devuelve su resultado. `docNames`: nombre original de cada documento. */
+/** Guarda el estudio de crédito del acreditado y devuelve su resultado. `readings`: lo que se leyó de cada documento. */
 export function saveStudy(
   db: DB,
   cedula: string,
@@ -200,7 +200,7 @@ export function saveStudy(
   age: number,
   answers: StudyAnswers,
   docs: Partial<Record<DocKey, string>>,
-  docNames: Partial<Record<DocKey, string>>,
+  readings: Partial<Record<DocKey, DocReading>>,
 ) {
   const prev = db.applicants.find((x) => x.cedula === cedula);
   if (prev?.retryAt && prev.retryAt > now(db))
@@ -208,13 +208,13 @@ export function saveStudy(
   const hasUnpaidLoan = db.loans.some((l) => l.cedula === cedula && loanView(db, l).overdue);
   let result;
   try {
-    result = computeStudy(answers, { docs: docNames, hasUnpaidLoan });
+    result = computeStudy(answers, { docs: readings, hasUnpaidLoan });
   } catch (err) {
     throw new BusinessError((err as Error).message);
   }
 
   // El modelo de ML ajusta el nivel de reglas: sube o baja un escalón según la probabilidad de atraso
-  const ml = assessWithML(answers, docNames, age, result.riskLevel, result.maxInstallment);
+  const ml = assessWithML(answers, readings, age, result.riskLevel, result.maxInstallment);
   let riskLevel: RiskLevel = result.riskLevel;
   let reasons = result.reasons;
   if (ml?.adjustment === 1) riskLevel = (riskLevel - 1) as RiskLevel;
@@ -268,6 +268,7 @@ export function saveStudy(
     review: result.review,
     reasons,
     ml,
+    docReadings: readings,
     retryAt: riskLevel === 4 ? now(db) + CONFIG.retryDays * DAY_MS : undefined,
     evaluatedAt: now(db),
   });
@@ -289,6 +290,19 @@ export function studyView(a: Applicant, t: number) {
     review: a.review,
     reasons: a.reasons,
     ml: a.ml ?? null,
+    // Qué se leyó de cada documento (sin el titular ni rutas de archivo)
+    docs: (Object.entries(a.docReadings ?? {}) as [DocKey, DocReading][]).map(([key, r]) => ({
+      key,
+      label: DOCS[key].split(" (")[0],
+      valid: r.valid,
+      altered: r.altered,
+      summary: r.summary,
+      reason: r.reason,
+      monthlyIncome: r.monthlyIncome,
+      hasOverdue: r.hasOverdue,
+      issuer: r.issuer,
+      source: r.source,
+    })),
     retryAt: a.retryAt ?? null,
     canRetake: !a.retryAt || a.retryAt <= t,
     docsCount: Object.keys(a.docs ?? {}).length,

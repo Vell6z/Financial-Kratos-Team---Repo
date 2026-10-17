@@ -43,7 +43,7 @@ export function brebKeyFormatError(key: string, type: BrebKeyType): string | nul
     case "MAIL":
       return /^[^@\s]+@[^@\s]+\.[^@\s]{2,}$/.test(key) ? null : "Revisa el correo: debe verse como nombre@dominio.com";
     case "ALPHANUMERIC":
-      return /^@[A-Za-z0-9._-]{3,20}$/.test(key) ? null : "El alias empieza por @ y tiene de 3 a 20 letras o números";
+      return /^@[A-Za-z0-9._-]{2,40}$/.test(key) ? null : "El alias empieza por @ y tiene de 2 a 40 letras o números";
     case "ESTABLISHMENT_CODE":
       return /^[A-Za-z]?\d{8}$/.test(key) ? null : "El código de comercio tiene 8 dígitos (puede empezar por una letra)";
   }

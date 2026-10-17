@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { BrebQrScanner } from "@/components/breb-qr-scanner";
 import { ConfirmDialog, useToast } from "@/components/feedback";
 import { Alert, Badge, Button, Card, Input, MoneyInput, PageHeader, Spinner, api } from "@/components/ui";
 import { bankName, BREB_KEY_TYPE_IDS, BREB_KEY_TYPES, SANDBOX_KEYS, brebKeyFormatError, detectBrebKeyType, normalizeBrebKey, type BrebKeyType } from "@/lib/breb-keys";
@@ -128,6 +129,9 @@ function LoanOffer({ evaluation, defaultLlave, onDone }: { evaluation: Evaluatio
   const [typeTouched, setTypeTouched] = useState(false);
   const [verification, setVerification] = useState<Verification | null>(null);
   const [verifying, setVerifying] = useState(false);
+  const [scanning, setScanning] = useState(false);
+  // La llave del diálogo vino de un QR escaneado
+  const [fromQr, setFromQr] = useState(false);
   const [mode, setMode] = useState<Verification["mode"] | null>(null);
   const key = normalizeBrebKey(llave);
   const llaveError = brebKeyFormatError(key, keyType);
@@ -152,13 +156,15 @@ function LoanOffer({ evaluation, defaultLlave, onDone }: { evaluation: Evaluatio
   const tooHigh = !amountError && schedule[0].payment > evaluation.maxInstallment;
 
   /** Paso 1: consultar la llave en el directorio Bre-B y mostrar el titular para que lo confirme */
-  async function verify() {
+  async function verify(from?: { key: string; keyType: BrebKeyType }) {
     setTouched(true);
-    if (amountError || llaveError || tooHigh) return;
+    const target = from ?? { key, keyType };
+    if (amountError || tooHigh || (!from && llaveError)) return;
     setVerifying(true);
     setError("");
+    setFromQr(Boolean(from));
     try {
-      setVerification(await api<Verification>("/api/breb/verify", { key, keyType }));
+      setVerification(await api<Verification>("/api/breb/verify", target));
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -255,7 +261,16 @@ function LoanOffer({ evaluation, defaultLlave, onDone }: { evaluation: Evaluatio
 
           <div className="space-y-3">
             <div className="text-sm">
-              <span className="mb-2 block font-medium">Llave Bre-B donde recibes el dinero</span>
+              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                <span className="font-medium">Llave Bre-B donde recibes el dinero</span>
+                <button
+                  type="button"
+                  onClick={() => setScanning(true)}
+                  className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-line px-3 text-xs font-medium transition hover:border-brand/50"
+                >
+                  <span aria-hidden="true">⌗</span> Escanear QR Bre-B
+                </button>
+              </div>
               <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Tipo de llave">
                 {BREB_KEY_TYPE_IDS.map((t) => (
                   <button
@@ -322,12 +337,27 @@ function LoanOffer({ evaluation, defaultLlave, onDone }: { evaluation: Evaluatio
               {error}
             </Alert>
           )}
-          <Button onClick={verify} loading={verifying} className="w-full py-2.5" disabled={Boolean(amountError) || tooHigh}>
+          <Button onClick={() => verify()} loading={verifying} className="w-full py-2.5" disabled={Boolean(amountError) || tooHigh}>
             {verifying ? "Verificando tu llave…" : "Verificar llave y solicitar"}
           </Button>
           <p className="text-center text-[11px] text-muted">El dinero llega a tu llave Bre-B al instante si hay capital disponible.</p>
         </Card>
       </div>
+
+      {scanning && (
+        <BrebQrScanner
+          onClose={() => setScanning(false)}
+          onUse={(qr) => {
+            // La llave del QR pasa al formulario y se consulta en el directorio Bre-B; el titular lo confirma el usuario
+            setScanning(false);
+            setLlave(qr.key);
+            setKeyType(qr.keyType);
+            setTypeTouched(true);
+            setVerification(null);
+            void verify({ key: qr.key, keyType: qr.keyType });
+          }}
+        />
+      )}
 
       <ConfirmDialog
         open={Boolean(verification)}
@@ -352,6 +382,7 @@ function LoanOffer({ evaluation, defaultLlave, onDone }: { evaluation: Evaluatio
                 Solo confirma si la cuenta es tuya. Si no lo es, cancela y usa una llave a tu nombre.
               </Alert>
             )}
+            {fromQr && <p className="text-[11px] text-muted">Llave leída del QR Bre-B. El titular y el banco vienen del directorio, no del QR.</p>}
             {verification.mode !== "production" && (
               <p className="text-[11px] text-muted">{verification.mode === "sandbox" ? "Consultado en el directorio de pruebas de Wompi." : "Verificación simulada."}</p>
             )}

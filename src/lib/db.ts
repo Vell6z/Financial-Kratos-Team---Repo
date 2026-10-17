@@ -6,7 +6,7 @@ import type { Installment } from "./finance";
 import type { AccountRole } from "./registration";
 import type { BrebKeyType } from "./breb-keys";
 import type { MLAssessment } from "./riesgo-ml";
-import type { DocKey, StudyAnswers, StudyResult } from "./scoring";
+import type { DocKey, DocReading, StudyAnswers, StudyResult } from "./scoring";
 import { demoUsers } from "./demo-accounts";
 
 // Persistencia mínima en un archivo JSON (suficiente para la demo; sin base de datos).
@@ -73,6 +73,8 @@ export interface Applicant {
   review: boolean;
   /** Ajuste del modelo de Machine Learning sobre el nivel de reglas (src/lib/riesgo-ml.ts) */
   ml?: MLAssessment | null;
+  /** Lo que se leyó de cada documento (IA o simulado) */
+  docReadings?: Partial<Record<DocKey, DocReading>>;
   /** Nivel 4: razones y fecha (reloj de la demo) desde la que puede volver a solicitar */
   reasons: string[];
   retryAt?: number;

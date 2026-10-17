@@ -16,7 +16,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { INSTALLMENT_DAYS, LEVELS, MIN_LOAN, type Level } from "../src/lib/config";
 import { buildSchedule } from "../src/lib/finance";
-import { computeStudy, creditLimit, EMPTY_STUDY, LIKERT, type DocKey, type Reference, type StudyAnswers } from "../src/lib/scoring";
+import { computeStudy, creditLimit, EMPTY_STUDY, LIKERT, readingsFromNames, type DocKey, type Reference, type StudyAnswers } from "../src/lib/scoring";
 
 const ROWS = Number(process.argv[2] ?? 6000);
 const SEED = Number(process.argv[3] ?? 42);
@@ -211,7 +211,7 @@ function person(id: number) {
   const topups = roundTo(clamp(lognormal(income * 0.025, 0.4), 5_000, 300_000), 1_000);
   const walletTx = Math.round(clamp(lognormal(digital * 40 + 1, 0.7) - 2, 0, 400));
 
-  const study = computeStudy(a, { docs, hasUnpaidLoan: false });
+  const study = computeStudy(a, { docs: readingsFromNames(docs), hasUnpaidLoan: false });
 
   // ---------- Crédito ----------
   const freeReal = income - expenses - debts;

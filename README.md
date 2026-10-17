@@ -18,6 +18,7 @@ Inversionista ──Interledger──▶ Bóveda (cajita por nivel) ──Bre-B�
 | Conversión pesos → moneda de la bóveda | **Tasa de mercado** (open.er-api.com, `src/lib/fx.ts`); `OP_COP_PER_UNIT` la fija a mano |
 | Verificación de la llave Bre-B (titular y banco) | **Real** con el directorio Bre-B de Wompi (sandbox; simulado si no hay llaves) |
 | Desembolso (payout) por Bre-B | **Simulado con datos reales**: justo antes de pagar, la llave se re-verifica en el directorio Bre-B de producción (solo lectura) y se arma el payout exacto para Wompi (referencia e idempotency key = id del crédito, monto en centavos), pero **no se envía**. Ver `src/lib/payouts.ts` |
+| Lectura de documentos del estudio | **IA (Gemini)** con `GEMINI_API_KEY`: tipo de documento, ingreso del extracto, mora en la factura y señales de alteración (`src/lib/doc-reader.ts`). Sin llave, trucos en el nombre del archivo |
 | Pago de cuotas por Bre-B | **Simulador de banco** en `/mi-credito`: el acreditado transfiere (completo o abono parcial) a la llave `@kratosboveda`, vinculada a la bóveda; el dinero entra al pool del nivel (`VAULT_BREB` en `src/lib/config.ts`) |
 | Estudio de crédito, niveles, cuotas, fondeo | Funcional |
 
@@ -100,6 +101,13 @@ Al reservar el capital (`TREASURY_DEBITED`) la llave se vuelve a consultar: si y
 banco, pasa a `BREB_KEY_REJECTED`, el capital vuelve al pool y el crédito queda `cancelado` (el acreditado puede pedirlo de nuevo).
 Si el directorio no responde, el crédito queda reservado y se reintenta; nunca se paga con un resultado incierto.
 El sandbox solo reconoce `@elias123`, `1020304050`, `3001234567`, `ecolon@wompi.com` y `B00012345`.
+
+**QR Bre-B** (`src/lib/breb-qr.ts` + `src/components/breb-qr-scanner.tsx`): en `/credito`, *Escanear QR Bre-B* lee el QR de cobro
+del banco con la cámara (necesita https o localhost) o desde una foto (`jsqr`). El lector EMVCo falla cerrado: exige el CRC
+(CRC-16/CCITT-FALSE) como último campo, una sola plantilla de llave con namespace `CO.COM.RBM.LLA` (tags 26–51; también
+acepta `CO.COM.RBM` a secas) y una sola llave (.01 documento, .02 celular, .03 correo, .04 alias). Las demás plantillas
+`CO.COM.RBM.*` de los QR reales (RED, CU, CA, CANAL, IVA, TRXID, SEC…) no traen la llave y se ignoran. Probado con QR reales. Un QR válido no prueba que la llave exista: después se consulta el
+directorio Bre-B y el usuario confirma el titular, que sale del directorio y no del QR. El monto del QR se ignora.
 
 ## Guion de demo (≈3 min)
 

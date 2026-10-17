@@ -242,9 +242,54 @@ export function studyErrors(step: number, a: StudyAnswers): StudyErrors {
 // Cálculo del perfil (solo en el servidor)
 // ======================================================================
 
+/**
+ * Lo que se leyó de un documento. Con GEMINI_API_KEY lo lee la IA (src/lib/doc-reader.ts);
+ * sin llave se usa `readingFromName` (trucos en el nombre del archivo, para la demo y el dataset).
+ */
+export interface DocReading {
+  /** Se pudo leer y es del tipo de documento esperado: solo así respalda respuestas */
+  valid: boolean;
+  /** Señales de edición o falsificación: no respalda nada y excluye */
+  altered: boolean;
+  /** Extracto: ingreso mensual promedio (abonos/depósitos), en pesos */
+  monthlyIncome: number | null;
+  /** Factura, arriendo, paz y salvo o libreta: muestra mora, saldo vencido o corte */
+  hasOverdue: boolean | null;
+  holderName: string | null;
+  issuer: string | null;
+  documentDate: string | null;
+  /** Qué se leyó, en una frase para el usuario */
+  summary: string;
+  /** Por qué no sirve (si valid es false) */
+  reason: string | null;
+  source: "gemini" | "simulado";
+}
+
+/** Lectura simulada a partir del nombre del archivo (trucos de demo: factura_mora, extracto_1000000, …alterad…) */
+export function readingFromName(key: DocKey, fileName: string): DocReading {
+  const n = fileName.toLowerCase();
+  const altered = n.includes("alterad");
+  const income = key === "extracto" ? Number(n.match(/extracto[_-]?(\d{4,})/)?.[1] ?? NaN) : NaN;
+  return {
+    valid: !altered,
+    altered,
+    monthlyIncome: income > 0 ? income : null,
+    hasOverdue: key === "factura" ? n.includes("mora") : null,
+    holderName: null,
+    issuer: null,
+    documentDate: null,
+    summary: altered ? "El documento parece alterado." : "Documento recibido (lectura simulada).",
+    reason: altered ? "Parece alterado" : null,
+    source: "simulado",
+  };
+}
+
+export const readingsFromNames = (names: Partial<Record<DocKey, string>>) =>
+  Object.fromEntries((Object.entries(names) as [DocKey, string][]).map(([k, n]) => [k, readingFromName(k, n)])) as Partial<Record<DocKey, DocReading>>;
+
 export interface StudyContext {
-  /** Nombre original de cada documento subido (la lectura es simulada: se usan trucos en el nombre) */
-  docs: Partial<Record<DocKey, string>>;
+  /** Lo que se leyó de cada documento subido */
+  docs: Partial<Record<DocKey, DocReading>>;
   /** Tiene un crédito con la plataforma con cuotas vencidas sin pagar */
   hasUnpaidLoan: boolean;
 }
@@ -282,12 +327,11 @@ export function computeStudy(a: StudyAnswers, ctx: StudyContext): StudyResult {
 
   const alerts: string[] = [];
   const exclusions: string[] = [];
-  const docName = (k: DocKey) => ctx.docs[k]?.toLowerCase() ?? "";
-
-  // Documento alterado (truco de demo: "alterad" en el nombre) → no respalda nada y excluye
-  const altered = (Object.keys(ctx.docs) as DocKey[]).filter((k) => docName(k).includes("alterad"));
+  // Documento alterado → no respalda nada y excluye
+  const altered = (Object.keys(ctx.docs) as DocKey[]).filter((k) => ctx.docs[k]?.altered);
   if (altered.length) exclusions.push("Uno de los documentos que subiste parece alterado.");
-  const hasDoc = (k: DocKey) => Boolean(ctx.docs[k]) && !altered.includes(k);
+  // Solo respalda si se pudo leer y es del tipo esperado
+  const hasDoc = (k: DocKey) => Boolean(ctx.docs[k]?.valid) && !altered.includes(k);
 
   // Referencias: la confirmación es simulada (si pidió enviarle mensaje, se da por confirmada)
   const refs = a.references.filter(refComplete).map((r) => ({ ...r, status: r.notify ? "confirmada" : "registrada" }));
@@ -308,9 +352,9 @@ export function computeStudy(a: StudyAnswers, ctx: StudyContext): StudyResult {
   };
   const opt = (list: Option[], id: string) => pick(list, id)!;
 
-  // ---------- X2: extracto vs. ingreso (truco: "extracto_1000000" en el nombre) ----------
+  // ---------- X2: extracto vs. ingreso declarado ----------
   let income = num(a.income);
-  const extractIncome = hasDoc("extracto") ? Number(docName("extracto").match(/extracto[_-]?(\d{4,})/)?.[1] ?? NaN) : NaN;
+  const extractIncome = hasDoc("extracto") ? (ctx.docs.extracto?.monthlyIncome ?? NaN) : NaN;
   if (extractIncome > 0 && income > extractIncome * CONFIG.incomeMismatch) {
     alerts.push("El ingreso que declaraste es mucho mayor que el de tu extracto: usamos el del extracto.");
     income = extractIncome;
@@ -337,7 +381,7 @@ export function computeStudy(a: StudyAnswers, ctx: StudyContext): StudyResult {
 
   // ---------- Historial de pagos (30) ----------
   let utilities = a.utilities;
-  if (utilities === "siempre" && hasDoc("factura") && docName("factura").includes("mora")) {
+  if (utilities === "siempre" && hasDoc("factura") && ctx.docs.factura?.hasOverdue) {
     alerts.push("Dijiste que pagas los servicios siempre a tiempo, pero la factura muestra mora: lo calificamos como 1 o 2 retrasos.");
     utilities = "1a2";
   }

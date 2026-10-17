@@ -46,9 +46,23 @@ interface StudyView {
   review: boolean;
   reasons: string[];
   ml: { probability: number; rulesLevel: Level | 4; adjustment: -1 | 0 | 1; against: string[]; inFavor: string[] } | null;
+  docs: DocView[];
   retryAt: number | null;
   canRetake: boolean;
   docsCount: number;
+}
+
+interface DocView {
+  key: string;
+  label: string;
+  valid: boolean;
+  altered: boolean;
+  summary: string;
+  reason: string | null;
+  monthlyIncome: number | null;
+  hasOverdue: boolean | null;
+  issuer: string | null;
+  source: "gemini" | "simulado";
 }
 
 interface Me {
@@ -176,8 +190,9 @@ function Wizard({ first, onDone }: { first: boolean; onDone: (s: StudyView) => v
               Confirmo que soy mayor de 18 años.
             </Check>
             <Check checked={a.consent} onChange={(v) => set("consent", v)} error={err("consent")}>
-              Autorizo el tratamiento de mis datos personales (Ley 1581 de 2012 y Ley 1266 de 2008) solo para evaluar mi crédito, y que
-              contacten a mis referencias. Puedo revocar esta autorización cuando quiera.
+              Autorizo el tratamiento de mis datos personales (Ley 1581 de 2012 y Ley 1266 de 2008) solo para evaluar mi crédito, que
+              contacten a mis referencias y que los documentos que suba se lean con inteligencia artificial (Google Gemini). Puedo revocar
+              esta autorización cuando quiera.
             </Check>
           </>
         )}
@@ -619,6 +634,8 @@ function Result({ study, onRetake }: { study: StudyView; onRetake: () => void })
 
         {study.ml && <MLCard ml={study.ml} level={study.riskLevel} />}
 
+        {study.docs?.length > 0 && <DocsCard docs={study.docs} />}
+
         <ScoreBar score={study.score} />
 
         <div className="space-y-1">
@@ -685,6 +702,43 @@ function Result({ study, onRetake }: { study: StudyView; onRetake: () => void })
           )}
         </div>
       </Card>
+    </div>
+  );
+}
+
+/** Qué se leyó de cada documento: si respaldó respuestas o por qué no */
+function DocsCard({ docs }: { docs: DocView[] }) {
+  const ai = docs.some((d) => d.source === "gemini");
+  return (
+    <div className="space-y-3 rounded-xl border border-line p-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-sm font-semibold">Documentos revisados</h2>
+        <Badge>{ai ? "Leídos con IA" : "Lectura simulada"}</Badge>
+      </div>
+      <ul className="space-y-2">
+        {docs.map((d) => (
+          <li key={d.key} className="flex gap-3 text-sm">
+            <span
+              className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-xs ${
+                d.valid ? "bg-mint/15 text-mint" : d.altered ? "bg-red-500/15 text-red-600 dark:text-red-400" : "bg-orange/15 text-orange"
+              }`}
+              aria-hidden="true"
+            >
+              {d.valid ? "✓" : d.altered ? "✕" : "!"}
+            </span>
+            <div className="min-w-0">
+              <div className="font-medium">
+                {d.label}
+                {d.issuer && <span className="font-normal text-muted"> · {d.issuer}</span>}
+              </div>
+              <p className="text-xs text-muted">{d.valid ? d.summary : d.reason}</p>
+              {d.valid && d.monthlyIncome !== null && <p className="text-xs">Ingreso mensual leído: {cop(d.monthlyIncome)}</p>}
+              {d.valid && d.hasOverdue && <p className="text-xs text-orange">Muestra pagos atrasados o saldo vencido.</p>}
+            </div>
+          </li>
+        ))}
+      </ul>
+      <p className="text-[11px] text-muted">Los documentos que no se pudieron confirmar no cuentan como respaldo. Puedes repetir el estudio con el original.</p>
     </div>
   );
 }
