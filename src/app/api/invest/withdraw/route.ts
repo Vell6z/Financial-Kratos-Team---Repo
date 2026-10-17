@@ -3,6 +3,7 @@ import { requireRole, requireUser } from "@/lib/auth";
 import { withDB, newId } from "@/lib/db";
 import { maxWithdrawalCop } from "@/lib/fx";
 import { publicOrigin } from "@/lib/origin";
+import { assertNotVault } from "@/lib/investor-wallet";
 import { isInterledgerEnabled, receivedShare, sendFromVault, startPayment, vaultUrl, VaultGrantError } from "@/lib/openpayments";
 import { BusinessError, checkWithdraw, debitWithdraw, refundWithdraw } from "@/lib/services";
 
@@ -34,6 +35,8 @@ export async function POST(request: Request) {
       const user = await requireUser(db);
       requireRole(user, "inversor");
       if (!user.wallet) throw new BusinessError("No tienes una wallet registrada");
+      // La bóveda no se puede enviar a sí misma: el inversionista debe tener su propia wallet
+      assertNotVault(user.wallet);
       checkWithdraw(db, user.wallet, level, amountCop, max);
       if (!db.vaultGrant) return { wallet: user.wallet, grant: null, txId: null };
       const txId = debitWithdraw(db, user.wallet, level, amountCop, "interledger", max);

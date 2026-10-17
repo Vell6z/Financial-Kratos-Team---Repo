@@ -97,6 +97,9 @@ const asUrl = (w: string) => {
 
 export default function InvestPage() {
   const [wallet, setWallet] = useState("");
+  // La wallet guardada en el perfil (a donde llegan los retiros)
+  const [savedWallet, setSavedWallet] = useState<string | null>(null);
+  const [savingWallet, setSavingWallet] = useState(false);
   const [level, setLevel] = useState<Level>(2);
   const [amount, setAmount] = useState("1000000");
   // Una sola vez o repetir la inversión cada intervalo (por defecto, cada mes)
@@ -138,7 +141,24 @@ export default function InvestPage() {
     setMaxWithdrawal(data.maxWithdrawal);
     setInterledger(data.interledger);
     if (data.wallet) setWallet((prev) => prev || data.wallet!);
+    setSavedWallet(data.wallet);
   }, []);
+
+  /** Guarda la wallet sin invertir: las cajitas pasan a la nueva y los retiros llegan allá */
+  async function saveWallet() {
+    setSavingWallet(true);
+    try {
+      const res = await api<{ wallet: string }>("/api/invest/wallet", undefined, { method: "PUT", body: { wallet } });
+      setWallet(res.wallet);
+      setSavedWallet(res.wallet);
+      toast("success", "Wallet actualizada", "Tus cajitas siguen contigo. Desde ahora inviertes y recibes los retiros en esta wallet.");
+      await load();
+    } catch (e) {
+      toast("error", "No se pudo cambiar la wallet", (e as Error).message);
+    } finally {
+      setSavingWallet(false);
+    }
+  }
 
   useEffect(() => {
     const q = new URLSearchParams(window.location.search);
@@ -305,6 +325,16 @@ export default function InvestPage() {
                 error={submitted ? walletError : null}
                 hint="Desde aquí envías la inversión y aquí recibes tus retiros."
               />
+              {savedWallet && wallet.trim() && asUrl(wallet) !== savedWallet && (
+                <div className="-mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg bg-brand-soft px-3 py-2 text-xs">
+                  <span className="text-muted">
+                    Tu wallet guardada es <span className="break-all font-medium text-foreground">{walletLabel(savedWallet)}</span>. Tus retiros llegan ahí.
+                  </span>
+                  <Button type="button" variant="ghost" loading={savingWallet} disabled={Boolean(walletError)} onClick={saveWallet}>
+                    Guardar esta wallet
+                  </Button>
+                </div>
+              )}
 
               <div className="text-sm" role="radiogroup" aria-label="Perfil de riesgo">
                 <span className="mb-2 block font-medium">2. Perfil de riesgo</span>

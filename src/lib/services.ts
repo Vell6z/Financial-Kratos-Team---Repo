@@ -97,6 +97,31 @@ export function withdrawable(db: DB, p: Position, maxCop: MaxCop = Infinity) {
  * Abona una inversión a la cajita como un aporte nuevo. Devuelve el id del movimiento.
  * `partial`: llegó solo una parte de lo pedido (confirmado por la bóveda); se abona lo que llegó aunque sea menor al mínimo.
  */
+/**
+ * Cambia la wallet del inversionista sin que pierda nada: sus cajitas y movimientos pasan a la nueva wallet
+ * (se buscan por dirección). `wallet` ya viene normalizada y validada contra la red por la ruta.
+ * Las inversiones recurrentes no se mueven (el permiso lo aprobó la wallet anterior y solo cobra de ella): hay que cancelarlas antes.
+ */
+export function changeInvestorWallet(db: DB, user: { id: string; wallet?: string }, wallet: string) {
+  const old = user.wallet;
+  if (old === wallet) return;
+  if (db.users.some((u) => u.id !== user.id && u.wallet === wallet)) throw new BusinessError("Esa wallet ya está registrada en otra cuenta.");
+  if (old) {
+    if ((db.recurring ?? []).some((s) => s.wallet === old && s.status !== "cancelada"))
+      throw new BusinessError("Cancela tus inversiones recurrentes antes de cambiar de wallet: el permiso que aprobaste solo cobra de tu wallet actual.");
+  }
+  if (db.positions.some((p) => p.wallet === wallet)) throw new BusinessError("Esa wallet ya tiene cajitas de otra cuenta.");
+  if (old) {
+    // Cotizaciones que no se aprobaron en la wallet anterior: se descartan. Si alguien las aprueba después,
+    // la vuelta no las encuentra y responde "ya fue procesado o expiró" sin crear el pago (no se mueve dinero)
+    db.pending = db.pending.filter((p) => p.wallet !== old);
+    for (const p of db.positions) if (p.wallet === old) p.wallet = wallet;
+    // El comprobante conserva la wallet que se usó en ese momento (receipt.investorWallet); cambia solo el dueño
+    for (const t of db.txs) if (t.wallet === old) t.wallet = wallet;
+  }
+  user.wallet = wallet;
+}
+
 export function creditDeposit(db: DB, wallet: string, level: Level, amountCop: number, mode: "interledger" | "simulado", opts: { partial?: boolean } = {}) {
   const amountError = validateMoney(amountCop, { min: opts.partial ? 1 : MIN_INVESTMENT });
   if (amountError) throw new BusinessError(amountError);

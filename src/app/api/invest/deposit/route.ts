@@ -7,7 +7,8 @@ import { createRecurring, recurringReceipt } from "@/lib/recurring";
 import { intervalLabel } from "@/lib/recurring-interval";
 import { MIN_INVESTMENT } from "@/lib/config";
 import { processPayouts } from "@/lib/payouts";
-import { BusinessError, creditDeposit } from "@/lib/services";
+import { BusinessError, changeInvestorWallet, creditDeposit } from "@/lib/services";
+import { assertNotVault } from "@/lib/investor-wallet";
 import { validateMoney, validateWallet } from "@/lib/validators";
 
 /**
@@ -26,13 +27,15 @@ export async function POST(request: Request) {
     if (amountError) throw new BusinessError(amountError);
     const walletError = body.wallet ? validateWallet(String(body.wallet)) : null;
     if (walletError) throw new BusinessError(walletError);
-    // La wallet indicada queda guardada en el perfil del usuario
+    if (body.wallet) assertNotVault(String(body.wallet));
+    // La wallet indicada queda guardada en el perfil del usuario; si cambió, sus cajitas pasan a la nueva
     const wallet = await withDB(async (db) => {
       const user = await requireUser(db);
       requireRole(user, "inversor");
       requireVerifiedIdentity(user, "invertir");
-      if (body.wallet) user.wallet = normalizeWallet(String(body.wallet));
+      if (body.wallet) changeInvestorWallet(db, user, normalizeWallet(String(body.wallet)));
       if (!user.wallet) throw new BusinessError("Ingresa tu wallet address de Interledger");
+      assertNotVault(user.wallet);
       return user.wallet;
     });
 

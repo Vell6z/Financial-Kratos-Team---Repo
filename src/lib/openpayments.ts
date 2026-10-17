@@ -280,8 +280,9 @@ export function verifyInteractHash(p: { clientNonce?: string; interactNonce?: st
   } catch {
     // authServer no es una URL válida: se usa tal cual
   }
-  // La red de prueba usa el origin del authServer con "/"; se prueban variantes por robustez.
-  const candidates = [withSlash(origin), withSlash(p.authServer)];
+  // El último componente es la URL del grant endpoint. Según el servidor de autorización puede venir con o sin "/" final
+  // y con o sin la ruta del tenant (la red de prueba usa una de las variantes sin "/"): se aceptan las cuatro.
+  const candidates = [...new Set([p.authServer, withSlash(p.authServer), origin, withSlash(origin)])];
   for (const endpoint of candidates) {
     const expected = createHash("sha256").update(`${p.clientNonce}\n${p.interactNonce}\n${interactRef}\n${endpoint}`).digest("base64");
     if (expected.length === hash.length && timingSafeEqual(Buffer.from(expected), Buffer.from(hash))) return true;
@@ -557,8 +558,17 @@ export async function sendFromVault(grant: VaultGrant, investorWallet: string, a
   } catch (err) {
     console.error("No se pudo consultar el estado del retiro", err);
   }
-  if (payment.failed && payment.sentAmount.value === "0")
+  if (payment.failed && payment.sentAmount.value === "0") {
+    // Causa más común en la red de prueba: la bóveda no tiene saldo suficiente en su moneda
+    console.error("Retiro fallido desde la bóveda", {
+      outgoingPayment: payment.id,
+      debit: formatAmount(quote.debitAmount),
+      receive: formatAmount(quote.receiveAmount),
+      vault: vault.id,
+      hint: "Revisa el saldo de la bóveda en wallet.interledger-test.dev",
+    });
     throw new PaymentError("Interledger no pudo completar el envío desde la bóveda. No se movió tu dinero.");
+  }
   // Lo que llegó lo confirma la wallet del inversionista; si la consulta falla, se toma lo que dice la bóveda
   let confirmation: PaymentConfirmation;
   try {
