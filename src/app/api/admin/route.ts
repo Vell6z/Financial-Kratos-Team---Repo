@@ -18,8 +18,9 @@ export async function POST(request: Request) {
         db.clockOffsetMs += Number(days) * 86_400_000;
         accrueAll(db);
       } else if (action === "reset") {
-        // Conserva las cuentas de usuario, sus sesiones y el permiso de la bóveda; borra el resto de la demo
-        Object.assign(db, { ...emptyDB(), users: db.users, sessions: db.sessions, vaultGrant: db.vaultGrant });
+        // Conserva las cuentas de usuario, sus sesiones y el permiso de la bóveda; borra el resto de la demo.
+        // Sin las marcas de versión, al cargar la base se vuelven a precargar los datos de las cuentas demo con la fecha de hoy
+        Object.assign(db, { ...emptyDB(), users: db.users, sessions: db.sessions, vaultGrant: db.vaultGrant, demoSeeded: undefined, demoBorrowerSeeded: undefined });
       } else if (action === "face-approve" || action === "face-reject") {
         const user = db.users.find((u) => u.id === userId);
         if (!user) throw new BusinessError("Usuario no encontrado");

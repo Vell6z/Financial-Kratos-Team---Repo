@@ -11,6 +11,7 @@ import type { DocKey, DocReading, StudyAnswers, StudyResult } from "./scoring";
 import { demoUsers } from "./demo-accounts";
 import { updateDelinquency } from "./credit-history";
 import { seedDemoInvestments } from "./demo-seed";
+import { seedDemoBorrower } from "./demo-borrower-seed";
 
 // Persistencia mínima en un archivo JSON (suficiente para la demo; sin base de datos).
 
@@ -129,6 +130,8 @@ export interface Applicant {
   /** No puede pedir crédito hasta esta fecha (90 días de mora: 12 meses), aunque pague */
   blockedUntil?: number;
   evaluatedAt: number;
+  /** Estudio precargado para la demo (src/lib/demo-borrower-seed.ts) */
+  demo?: boolean;
 }
 
 /** Reporte negativo SIMULADO a una central de riesgo: no se envía a ninguna central */
@@ -243,6 +246,8 @@ export interface Loan {
   chargedOffAt?: number;
   /** Aviso y reporte a centrales de riesgo (simulados) */
   creditReport?: CreditReport;
+  /** Crédito precargado para la demo (src/lib/demo-borrower-seed.ts) */
+  demo?: boolean;
 }
 
 /** Pago de Open Payments esperando que el usuario lo apruebe en su wallet */
@@ -427,6 +432,8 @@ export interface DB {
   recurring?: RecurringInvestment[];
   /** Versión de las inversiones precargadas de la cuenta demo (src/lib/demo-seed.ts). `true` = versión 1 */
   demoSeeded?: number | boolean;
+  /** Versión del estudio y los créditos precargados de la cuenta demo de acreditado (src/lib/demo-borrower-seed.ts) */
+  demoBorrowerSeeded?: number;
 }
 
 const DB_PATH = path.join(process.cwd(), "data", "db.json");
@@ -458,6 +465,7 @@ async function load(): Promise<DB> {
   // Va fuera del try: un error aquí no debe confundirse con una base nueva
   for (const demo of demoUsers()) if (!db.users.some((u) => u.id === demo.id)) db.users.push(demo);
   seedDemoInvestments(db, now(db));
+  seedDemoBorrower(db, now(db));
   // Mora según el reloj de la demo: aviso del día 70, reporte simulado y castigo del día 90
   updateDelinquency(db, now(db));
   return db;
