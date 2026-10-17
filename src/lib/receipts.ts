@@ -1,6 +1,7 @@
 import "server-only";
 import { bankName, BREB_KEY_TYPES, type BrebKeyType } from "./breb-keys";
 import { EARLY_WITHDRAWAL_SHARE, LEVELS } from "./config";
+import { intervalLabel } from "./recurring-interval";
 import type { DB, Loan, Tx } from "./db";
 import { cop } from "./finance";
 import { COLORS, longDate, PdfDoc } from "./pdf-doc";
@@ -82,6 +83,7 @@ function investmentPdf(tx: Tx, now: number) {
   doc.row(deposit ? "Desde tu wallet" : "Hacia tu wallet", r?.investorWallet ?? tx.wallet ?? "—", { small: true });
   if (r?.vaultWallet) doc.row(deposit ? "Hacia la bóveda" : "Desde la bóveda", r.vaultWallet, { small: true });
   doc.row("Medio", r?.demo ? "Precargado para la demo (sin Interledger)" : tx.mode === "interledger" ? "Interledger · Open Payments (red de prueba)" : "Simulado (sin Open Payments)");
+  if (r?.recurring) doc.row("Inversión recurrente", `Cobro ${r.recurring.run} · ${intervalLabel(r.recurring.interval)}`);
   if (deposit && r?.maturesAt) {
     doc.row("Plazo del aporte", `Hasta el ${longDate(r.maturesAt, false)}`);
     doc.row("Antes del plazo", `Puedes retirar como máximo el ${EARLY_WITHDRAWAL_SHARE * 100} % de este aporte`);

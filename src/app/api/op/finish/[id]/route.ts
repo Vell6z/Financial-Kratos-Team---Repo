@@ -2,6 +2,7 @@ import type { NextRequest } from "next/server";
 import { withDB } from "@/lib/db";
 import { finishPayment, receivedShare, vaultUrl, verifyInteractHash } from "@/lib/openpayments";
 import { processPayouts } from "@/lib/payouts";
+import { createRecurring, recurringReceipt } from "@/lib/recurring";
 import { creditDeposit, debitWithdraw } from "@/lib/services";
 
 /** Callback de Open Payments: el usuario aprobó (o rechazó) el pago en su wallet. */
@@ -27,7 +28,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   if (!verifyInteractHash(pending, interactRef, q.get("hash"))) return back("error", "No pudimos verificar la aprobación del pago");
 
   try {
-    const { confirmation } = await finishPayment({ ...pending, interactRef });
+    const { confirmation, token } = await finishPayment({ ...pending, interactRef });
     // Se abona (o descuenta) lo que confirmó la wallet que recibe, no lo que se pidió
     const share = confirmation ? receivedShare(confirmation) : 1;
     const amountCop = Math.round(pending.amountCop * share);
@@ -38,6 +39,21 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
           : debitWithdraw(db, pending.wallet, pending.level, amountCop, "interledger");
       const tx = db.txs.find((t) => t.id === id);
       if (tx?.receipt) Object.assign(tx.receipt, { vaultWallet: vaultUrl(), requestedCop: pending.amountCop, quote: pending.quote, confirmation });
+      // Inversión recurrente: se guarda el permiso para cobrar el mismo monto en los siguientes intervalos
+      if (pending.kind === "deposit" && pending.recurring) {
+        const r = pending.recurring;
+        const subId = createRecurring(db, {
+          wallet: pending.wallet,
+          level: pending.level,
+          mode: "interledger",
+          amountCop: pending.amountCop,
+          interval: r.interval,
+          start: Date.parse(r.start),
+          debitAmount: r.debitAmount,
+          grant: token,
+        });
+        if (tx?.receipt) tx.receipt.recurring = recurringReceipt(db.recurring!.find((s) => s.id === subId)!, 1);
+      }
       return id;
     });
     if (pending.kind === "deposit") void processPayouts();

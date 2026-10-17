@@ -16,6 +16,8 @@ interface Item {
   hasReceipt: boolean;
   /** Llegó solo una parte de lo pedido */
   partial: boolean;
+  /** Cobro de una inversión recurrente */
+  recurring: boolean;
 }
 
 /** Cómo ve cada movimiento el propio usuario: entra (+) o sale (−) de su bolsillo */
@@ -113,7 +115,7 @@ export default function MovementsPage() {
                       {incoming ? "↓" : "↑"}
                     </span>
                     <div className="min-w-0 flex-1">
-                      <div className="text-sm font-medium leading-snug">{v.label}</div>
+                      <div className="text-sm font-medium leading-snug">{i.recurring ? "Inversión recurrente" : v.label}</div>
                       <div className="text-xs text-muted">{fmtDate(i.at)}</div>
                       <div className="text-[11px] text-muted">
                         {LEVELS[i.level].name} · vía {v.via}

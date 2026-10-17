@@ -3,11 +3,14 @@ import { requireAdmin, requireUser } from "@/lib/auth";
 import { now, withDB } from "@/lib/db";
 import { isInterledgerEnabled } from "@/lib/openpayments";
 import { processPayouts } from "@/lib/payouts";
+import { processRecurring } from "@/lib/recurring";
 import { accrueAll, loanView } from "@/lib/services";
 
 export async function GET() {
   return handle(async () => {
     await processPayouts();
+    // Cobra las inversiones recurrentes que tocan (en segundo plano)
+    void processRecurring();
     return withDB(async (db) => {
       requireAdmin(await requireUser(db));
       accrueAll(db);

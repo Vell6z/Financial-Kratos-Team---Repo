@@ -10,7 +10,8 @@ import {
   OpenPaymentsClientError,
   type WalletAddress,
 } from "@interledger/open-payments";
-import type { PendingVaultGrant, VaultGrant } from "./db";
+import type { PendingVaultGrant, RecurringInvestment, VaultGrant } from "./db";
+import { DEFAULT_RECURRING_INTERVAL, parseDuration } from "./recurring-interval";
 
 // Integración con Open Payments (Interledger).
 // La plataforma firma las peticiones con la llave de su wallet (OP_PLATFORM_WALLET_ADDRESS)
@@ -86,6 +87,12 @@ export async function vaultFx() {
 /** Error de Open Payments con un mensaje que se le puede mostrar al usuario */
 export class PaymentError extends Error {}
 
+/** Intervalo de las inversiones recurrentes (ISO 8601). OP_RECURRING_INTERVAL lo cambia, por ejemplo PT5M para mostrarlo en la demo */
+export function recurringInterval() {
+  const env = process.env.OP_RECURRING_INTERVAL?.trim();
+  return env && parseDuration(env) ? env : DEFAULT_RECURRING_INTERVAL;
+}
+
 export interface StartedPayment {
   redirectUrl: string;
   senderWallet: string;
@@ -103,6 +110,8 @@ export interface StartedPayment {
   quote: QuoteView;
   /** Cobro (incoming payment) en la wallet que recibe: para confirmar lo que llegó y cerrarlo */
   incoming: IncomingRef;
+  /** Inversión recurrente: el permiso cubre este monto en cada intervalo, desde `start` */
+  recurring?: { interval: string; start: string; debitAmount: Amount };
 }
 
 type Amount = { value: string; assetCode: string; assetScale: number };
@@ -158,6 +167,8 @@ export async function startPayment(opts: {
   amountCop: number;
   finishUrl: string;
   nonce: string;
+  /** Solo inversiones: el permiso queda abierto para debitar el mismo monto en cada intervalo */
+  recurring?: boolean;
 }): Promise<StartedPayment> {
   const client = await getClient();
   const wallet = (url: string, who: string) =>
@@ -198,7 +209,10 @@ export async function startPayment(opts: {
       : { walletAddress: sender.id, receiver: incoming.id, method: "ilp", debitAmount: vaultAmount },
   );
 
-  // 3. Grant interactivo para el outgoing payment: el dueño de la wallet que paga debe aprobar
+  // 3. Grant interactivo para el outgoing payment: el dueño de la wallet que paga debe aprobar.
+  //    Si es recurrente, el límite se repite en cada intervalo (R/inicio/P1M): este pago usa el del primer intervalo
+  const recurring =
+    opts.recurring && opts.kind === "deposit" ? { interval: recurringInterval(), start: new Date().toISOString(), debitAmount: quote.debitAmount } : undefined;
   const opGrant = await client.grant.request(
     { url: sender.authServer },
     {
@@ -208,7 +222,7 @@ export async function startPayment(opts: {
             type: "outgoing-payment",
             actions: ["create", "read"],
             identifier: sender.id,
-            limits: { debitAmount: quote.debitAmount },
+            limits: recurring ? { debitAmount: quote.debitAmount, interval: `R/${recurring.start}/${recurring.interval}` } : { debitAmount: quote.debitAmount },
           },
         ],
       },
@@ -219,6 +233,7 @@ export async function startPayment(opts: {
 
   return {
     redirectUrl: opGrant.interact.redirect,
+    recurring,
     incoming: {
       url: incoming.id,
       accessToken: ipGrant.access_token.value,
@@ -387,7 +402,10 @@ export async function finishPayment(p: {
   }
   if (confirmation && confirmation.received.value === 0 && !confirmation.inProgress)
     throw new PaymentError(`El pago no aparece en la wallet que recibe. Si se descontó de la tuya, escríbenos con este código: ${payment.id.split("/").pop()}`);
-  return { payment, confirmation };
+  // El token del permiso: en una inversión recurrente se guarda para los cobros siguientes
+  const t = grant.access_token;
+  const token = { accessToken: t.value, manageUrl: t.manage, tokenExpiresAt: t.expires_in ? Date.now() + t.expires_in * 1000 : null };
+  return { payment, confirmation, token };
 }
 
 // ======================================================================
@@ -567,4 +585,119 @@ export async function sendFromVault(grant: VaultGrant, investorWallet: string, a
       expiresAt: null,
     } satisfies QuoteView,
   };
+}
+
+// ======================================================================
+// Inversiones recurrentes
+// El inversionista aprueba UNA vez un permiso con intervalo (por ejemplo, hasta 268 USD cada mes).
+// Cada intervalo la plataforma crea el pago desde su wallet hacia la bóveda con ese permiso, sin pasar por la wallet.
+// ======================================================================
+
+/** El permiso recurrente ya no sirve (revocado, vencido o sin cupo en este intervalo) */
+export class RecurringGrantError extends PaymentError {}
+
+/**
+ * Cobra un intervalo de una inversión recurrente: debita de la wallet del inversionista el monto fijo
+ * del permiso y confirma en la bóveda lo que llegó. Devuelve el permiso actualizado (token rotado).
+ */
+export async function chargeRecurring(sub: RecurringInvestment) {
+  if (!sub.grant || !sub.debitAmount) throw new RecurringGrantError("Esta inversión recurrente no tiene permiso de Open Payments");
+  const client = await getClient();
+  const wallet = (url: string, who: string) =>
+    client.walletAddress.get({ url }).catch(() => {
+      throw new PaymentError(`No encontramos ${who} (${url}) en la red de Interledger.`);
+    });
+  const vault = await wallet(vaultUrl(), "la wallet de la bóveda");
+  const investor = await wallet(normalizeWallet(sub.wallet), "la wallet del inversionista");
+  const rate = await copRate(vault.assetCode);
+
+  // 1. Incoming payment en la bóveda (sin monto: recibe lo que llegue del debitAmount fijo)
+  const ipGrant = await client.grant.request(
+    { url: vault.authServer },
+    { access_token: { access: [{ type: "incoming-payment", actions: ["create", "read", "complete"] }] } },
+  );
+  if (!isFinalizedGrantWithAccessToken(ipGrant)) throw new Error("No se obtuvo permiso para crear el incoming payment");
+  const incoming = await client.incomingPayment.create(
+    { url: vault.resourceServer, accessToken: ipGrant.access_token.value },
+    { walletAddress: vault.id, expiresAt: new Date(Date.now() + 10 * 60 * 1000).toISOString() },
+  );
+
+  // 2. Cotización en la wallet del inversionista por el monto fijo que se le debita
+  const quoteGrant = await client.grant.request({ url: investor.authServer }, { access_token: { access: [{ type: "quote", actions: ["create", "read"] }] } });
+  if (!isFinalizedGrantWithAccessToken(quoteGrant)) throw new Error("No se obtuvo permiso para cotizar");
+  const quote = await client.quote.create(
+    { url: investor.resourceServer, accessToken: quoteGrant.access_token.value },
+    { walletAddress: investor.id, receiver: incoming.id, method: "ilp", debitAmount: sub.debitAmount },
+  );
+
+  // 3. Pago saliente con el permiso recurrente (rota el token si venció)
+  const grant = { ...sub.grant };
+  const rotate = async () => {
+    const t = await client.token.rotate({ url: grant.manageUrl, accessToken: grant.accessToken }).catch(() => {
+      throw new RecurringGrantError("El permiso de tu wallet venció o fue revocado. Vuelve a activar la inversión recurrente.");
+    });
+    grant.accessToken = t.access_token.value;
+    grant.manageUrl = t.access_token.manage;
+    grant.tokenExpiresAt = t.access_token.expires_in ? Date.now() + t.access_token.expires_in * 1000 : null;
+  };
+  if (grant.tokenExpiresAt && grant.tokenExpiresAt < Date.now() + 30_000) await rotate();
+  const create = () =>
+    client.outgoingPayment.create({ url: investor.resourceServer, accessToken: grant.accessToken }, { walletAddress: investor.id, quoteId: quote.id });
+  let payment;
+  try {
+    payment = await create();
+  } catch (err) {
+    const status = err instanceof OpenPaymentsClientError ? err.status : undefined;
+    if (status === 401) {
+      await rotate();
+      payment = await create();
+    } else if (status === 403) {
+      throw new RecurringGrantError("Tu wallet no autorizó este cobro: el permiso fue revocado o ya se usó en este periodo.");
+    } else throw err;
+  }
+  try {
+    for (let i = 0; i < 10 && !payment.failed && payment.sentAmount.value !== payment.debitAmount.value; i++) {
+      await new Promise((r) => setTimeout(r, 1000));
+      payment = await client.outgoingPayment.get({ url: payment.id, accessToken: grant.accessToken });
+    }
+  } catch (err) {
+    console.error("No se pudo consultar el estado del cobro recurrente", err instanceof OpenPaymentsClientError ? err.status : err);
+  }
+  if (payment.failed && payment.sentAmount.value === "0")
+    throw new PaymentError("Interledger no pudo cobrar este mes (¿saldo insuficiente en la wallet?). No se movió dinero.");
+
+  const done = payment.failed || payment.sentAmount.value === payment.debitAmount.value;
+  const ref: IncomingRef = { url: incoming.id, accessToken: ipGrant.access_token.value, manageUrl: ipGrant.access_token.manage, expected: quote.receiveAmount };
+  let confirmation: PaymentConfirmation;
+  try {
+    confirmation = await confirmIncoming(ref, { id: payment.id, done });
+  } catch (err) {
+    console.error("No se pudo confirmar el cobro recurrente en la bóveda", err instanceof OpenPaymentsClientError ? err.status : err);
+    confirmation = senderConfirmation(payment, incoming.id, decimal(quote.receiveAmount));
+  }
+  // Pesos que se abonan: lo que confirmó la bóveda, a la tasa del día
+  const share = receivedShare(confirmation);
+  const amountCop = Math.round(decimal(quote.receiveAmount).value * share * rate.copPerUnit);
+  return {
+    grant,
+    amountCop,
+    confirmation,
+    quote: {
+      debit: decimal(quote.debitAmount),
+      receive: decimal(quote.receiveAmount),
+      copPerUnit: rate.copPerUnit,
+      fxSource: rate.source,
+      fxUpdatedAt: rate.updatedAt,
+      amountCop,
+      vaultAsset: vault.assetCode,
+      expiresAt: null,
+    } satisfies QuoteView,
+  };
+}
+
+/** Revoca el token del permiso recurrente (si ya no existe, no pasa nada) */
+export async function revokeRecurringGrant(sub: RecurringInvestment) {
+  if (!sub.grant) return;
+  const client = await getClient();
+  await client.token.revoke({ url: sub.grant.manageUrl, accessToken: sub.grant.accessToken }).catch(() => {});
 }

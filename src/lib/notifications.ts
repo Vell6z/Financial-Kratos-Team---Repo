@@ -88,10 +88,26 @@ export function notificationsFor(db: DB, user: User): Notification[] {
       list.push({ id: "no-invest", tone: "info", title: "Haz tu primera inversión", body: "Elige un nivel de riesgo y empieza a rentar.", at: user.createdAt, href: "/invertir" });
     for (const tx of db.txs.filter((x) => x.wallet === user.wallet)) {
       if (tx.kind === "deposito_ilp")
-        list.push({ id: `tx-${tx.id}`, tone: "success", title: "Inversión recibida", body: `${cop(tx.amountCop)} en ${LEVELS[tx.level].name} por Interledger.`, at: tx.at, href: "/invertir" });
+        list.push({
+          id: `tx-${tx.id}`,
+          tone: "success",
+          title: (tx.receipt?.recurring?.run ?? 1) > 1 ? `Inversión recurrente: cobro ${tx.receipt!.recurring!.run}` : "Inversión recibida",
+          body: `${cop(tx.amountCop)} en ${LEVELS[tx.level].name} por Interledger.`,
+          at: tx.at,
+          href: "/invertir",
+        });
       if (tx.kind === "retiro_ilp")
         list.push({ id: `tx-${tx.id}`, tone: "success", title: "Retiro enviado", body: `${cop(tx.amountCop)} hacia tu wallet por Interledger.`, at: tx.at, href: "/invertir" });
     }
+    for (const s of (db.recurring ?? []).filter((x) => x.wallet === user.wallet && x.status === "pausada"))
+      list.push({
+        id: `rec-paused-${s.id}`,
+        tone: "warning",
+        title: "Inversión recurrente pausada",
+        body: s.lastError ?? "No pudimos cobrar con el permiso de tu wallet.",
+        at: Math.min(t, s.lastRunAt ?? s.createdAt),
+        href: "/invertir",
+      });
     for (const p of positions) {
       const late = db.loans.filter((l) => l.level === p.level).map((l) => loanView(db, l)).filter((l) => l.overdue);
       if (late.length)

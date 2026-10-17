@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { ConfirmDialog, useToast } from "@/components/feedback";
-import { Alert, Badge, Button, Card, EmptyState, Input, MoneyInput, PageHeader, Stat, api } from "@/components/ui";
+import { Alert, Badge, Button, Card, Choice, EmptyState, Input, MoneyInput, PageHeader, Stat, api } from "@/components/ui";
 import { EARLY_WITHDRAWAL_SHARE, investmentTermLabel, LEVEL_IDS, LEVELS, MIN_INVESTMENT, type Level } from "@/lib/config";
 import { accrue, cop, pct } from "@/lib/finance";
 import { validateMoney, validateWallet, walletLabel } from "@/lib/validators";
@@ -26,6 +26,21 @@ interface Position {
   allowed: number;
   max: number;
   lots: { id: string; at: number; principal: number; value: number; maturesAt: number; matured: boolean; allowed: number }[];
+}
+
+/** Inversión recurrente activa o pausada (sin tokens: los guarda el servidor) */
+interface Recurring {
+  id: string;
+  level: Level;
+  mode: "interledger" | "simulado";
+  amountCop: number;
+  /** Lo que se debita de la wallet en cada cobro (con Interledger) */
+  debit: { value: number; assetCode: string } | null;
+  intervalLabel: string;
+  status: "activa" | "pausada";
+  runs: number;
+  nextRunAt: number | null;
+  lastError: string | null;
 }
 
 const EARLY_PCT = `${EARLY_WITHDRAWAL_SHARE * 100} %`;
@@ -60,6 +75,8 @@ type DepositResult = {
   txId?: string;
   /** Retiro: llegó solo una parte a la wallet */
   partial?: { share: number; amountCop: number } | null;
+  /** Inversión recurrente: el permiso que se aprueba en la wallet se repite con esta frecuencia */
+  recurring?: { intervalLabel: string } | null;
 };
 /** Pago cotizado por Interledger que falta aprobar en la wallet */
 type Pending = DepositResult & { kind: "deposit" | "withdraw"; amountCop: number; level: Level };
@@ -82,6 +99,11 @@ export default function InvestPage() {
   const [wallet, setWallet] = useState("");
   const [level, setLevel] = useState<Level>(2);
   const [amount, setAmount] = useState("1000000");
+  // Una sola vez o repetir la inversión cada intervalo (por defecto, cada mes)
+  const [frequency, setFrequency] = useState<"once" | "recurring">("once");
+  const [recurringLabel, setRecurringLabel] = useState("cada mes");
+  const [subscriptions, setSubscriptions] = useState<Recurring[]>([]);
+  const [toCancel, setToCancel] = useState<Recurring | null>(null);
   const [positions, setPositions] = useState<Position[]>([]);
   const [busy, setBusy] = useState(false);
   const [pending, setPending] = useState<Pending | null>(null);
@@ -102,8 +124,17 @@ export default function InvestPage() {
   }, []);
 
   const load = useCallback(async () => {
-    const data = await api<{ interledger: boolean; wallet: string | null; positions: Position[]; maxWithdrawal: { usd: number; cop: number } }>("/api/invest");
+    const data = await api<{
+      interledger: boolean;
+      wallet: string | null;
+      positions: Position[];
+      maxWithdrawal: { usd: number; cop: number };
+      recurring: Recurring[];
+      recurringLabel: string;
+    }>("/api/invest");
     setPositions(data.positions);
+    setSubscriptions(data.recurring);
+    setRecurringLabel(data.recurringLabel);
     setMaxWithdrawal(data.maxWithdrawal);
     setInterledger(data.interledger);
     if (data.wallet) setWallet((prev) => prev || data.wallet!);
@@ -139,10 +170,15 @@ export default function InvestPage() {
     if (walletError || amountError) return;
     setBusy(true);
     try {
-      const res = await api<DepositResult>("/api/invest/deposit", { wallet, level, amountCop: Number(amount) });
+      const res = await api<DepositResult>("/api/invest/deposit", { wallet, level, amountCop: Number(amount), recurring: frequency === "recurring" });
       if (res.status === "pending") setPending({ ...res, kind: "deposit", amountCop: Number(amount), level });
       else {
-        toast("success", "Inversión registrada", `${cop(Number(amount))} en ${LEVELS[level].name}. Tu cajita ya está rentando.`);
+        toast(
+          "success",
+          "Inversión registrada",
+          `${cop(Number(amount))} en ${LEVELS[level].name}. Tu cajita ya está rentando.` +
+            (res.recurring ? ` Se repetirá ${res.recurring.intervalLabel}.` : ""),
+        );
         if (res.txId) setReceipt({ txId: res.txId, kind: "deposit" });
       }
       setSubmitted(false);
@@ -180,6 +216,20 @@ export default function InvestPage() {
     } finally {
       setBusy(false);
       setToWithdraw(null);
+    }
+  }
+
+  async function cancelRecurring(r: Recurring) {
+    setBusy(true);
+    try {
+      await api(`/api/invest/recurring/${r.id}`, undefined, { method: "DELETE" });
+      toast("success", "Inversión recurrente cancelada", "Revocamos el permiso en tu wallet: no habrá más cobros.");
+      await load();
+    } catch (e) {
+      toast("error", "No se pudo cancelar", (e as Error).message);
+    } finally {
+      setBusy(false);
+      setToCancel(null);
     }
   }
 
@@ -302,6 +352,22 @@ export default function InvestPage() {
                   ))}
                 </div>
               </div>
+
+              <Choice
+                label="4. ¿Cada cuánto?"
+                value={frequency}
+                onChange={setFrequency}
+                options={[
+                  { id: "once", title: "Una sola vez", sub: "Inviertes este monto hoy." },
+                  {
+                    id: "recurring",
+                    title: `Repetir ${recurringLabel}`,
+                    sub: interledger
+                      ? `Apruebas un permiso en tu wallet y te descontamos el mismo monto ${recurringLabel}. Lo cancelas cuando quieras.`
+                      : `Se invierte el mismo monto ${recurringLabel}. Lo cancelas cuando quieras.`,
+                  },
+                ]}
+              />
             </fieldset>
           </Card>
 
@@ -311,12 +377,19 @@ export default function InvestPage() {
             {awaitingDeposit ? (
               <>
                 <div>
-                  <h3 className="font-semibold">4. Aprueba el pago en tu wallet</h3>
+                  <h3 className="font-semibold">5. Aprueba el pago en tu wallet</h3>
                   <p className="text-sm text-muted">
                     Interledger ya cotizó tu inversión de {cop(awaitingDeposit.amountCop)} en {LEVELS[awaitingDeposit.level].name}.
                   </p>
                 </div>
                 <QuoteDetails p={awaitingDeposit} now={now} />
+                {awaitingDeposit.recurring && awaitingDeposit.quote && (
+                  <Alert tone="info" title={`Permiso recurrente: ${awaitingDeposit.recurring.intervalLabel}`}>
+                    En tu wallet autorizas que te descontemos{" "}
+                    <b className="text-foreground">{fmtAsset(awaitingDeposit.quote.debit.value, awaitingDeposit.quote.debit.assetCode)}</b>{" "}
+                    {awaitingDeposit.recurring.intervalLabel}. Este es el primer cobro; los siguientes llegan solos a tu cajita y puedes cancelarlos aquí.
+                  </Alert>
+                )}
                 {expired ? (
                   <Button className="w-full py-2.5" loading={busy} onClick={() => (setPending(null), invest())}>
                     Volver a cotizar
@@ -342,6 +415,7 @@ export default function InvestPage() {
                   <SummaryRow k="Cajita" v={`${LEVELS[level].name} · ${pct(LEVELS[level].rateEA)} EA`} />
                   <SummaryRow k="Plazo" v={investmentTermLabel(level)} />
                   <SummaryRow k="Monto" v={Number(amount) > 0 ? cop(Number(amount)) : "—"} />
+                  <SummaryRow k="Frecuencia" v={frequency === "recurring" ? capitalize(recurringLabel) : "Una sola vez"} />
                   {fx && fx.assetCode !== "COP" && Number(amount) > 0 && (
                     <SummaryRow k={`En ${fx.assetCode}`} v={`≈ ${fmtAsset(Number(amount) / fx.copPerUnit, fx.assetCode)}`} />
                   )}
@@ -363,7 +437,9 @@ export default function InvestPage() {
                   Cada aporte dura {investmentTermLabel(level)} desde que lo haces: antes de cumplirlo puedes retirar como máximo el {EARLY_PCT} de ese aporte.
                 </p>
                 <Button onClick={invest} loading={busy} className="w-full py-2.5">
-                  {busy ? "Cotizando con Interledger…" : `Invertir ${Number(amount) > 0 ? cop(Number(amount)) : ""}`}
+                  {busy
+                    ? "Cotizando con Interledger…"
+                    : `Invertir ${Number(amount) > 0 ? cop(Number(amount)) : ""}${frequency === "recurring" ? ` ${recurringLabel}` : ""}`}
                 </Button>
                 <p className="text-center text-[11px] text-muted">
                   {interledger ? "Después apruebas el pago en tu wallet de Interledger." : "Modo demostración: no se mueve dinero real."}
@@ -386,6 +462,37 @@ export default function InvestPage() {
           </div>
         )}
       </section>
+
+      {subscriptions.length > 0 && (
+        <section className="space-y-3">
+          <div>
+            <h2 className="text-lg font-semibold">Inversiones recurrentes</h2>
+            <p className="text-sm text-muted">Cada cobro entra a tu cajita como un aporte nuevo, con su propio plazo de un año.</p>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {subscriptions.map((r) => (
+              <RecurringCard key={r.id} r={r} busy={busy} onCancel={() => setToCancel(r)} />
+            ))}
+          </div>
+        </section>
+      )}
+
+      <ConfirmDialog
+        open={toCancel !== null}
+        title="¿Cancelar la inversión recurrente?"
+        confirmLabel="Cancelar inversión"
+        danger
+        loading={busy}
+        onConfirm={() => toCancel && cancelRecurring(toCancel)}
+        onCancel={() => setToCancel(null)}
+      >
+        {toCancel && (
+          <>
+            No habrá más cobros de {toCancel.debit ? fmtAsset(toCancel.debit.value, toCancel.debit.assetCode) : cop(toCancel.amountCop)}{" "}
+            {toCancel.intervalLabel}. Lo que ya invertiste sigue rentando en tu cajita {LEVELS[toCancel.level].name}.
+          </>
+        )}
+      </ConfirmDialog>
 
       <ConfirmDialog
         open={toWithdraw !== null}
@@ -520,6 +627,39 @@ function QuoteDetails({ p, now }: { p: Pending; now: number }) {
           </Alert>
         ))}
     </div>
+  );
+}
+
+const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+
+/** Una inversión recurrente: cuánto, cada cuánto, próximo cobro y opción de cancelar */
+function RecurringCard({ r, busy, onCancel }: { r: Recurring; busy: boolean; onCancel: () => void }) {
+  return (
+    <Card className="space-y-3">
+      <div className="flex items-center justify-between gap-2">
+        <span className="font-semibold">{LEVELS[r.level].name}</span>
+        <Badge tone={r.status === "activa" ? "good" : "warn"}>{r.status === "activa" ? "Activa" : "Pausada"}</Badge>
+      </div>
+      <div>
+        <div className="text-xl font-semibold tabular-nums">{r.debit ? fmtAsset(r.debit.value, r.debit.assetCode) : cop(r.amountCop)}</div>
+        <div className="text-xs text-muted">
+          {capitalize(r.intervalLabel)}
+          {r.debit ? ` · el primero fueron ${cop(r.amountCop)}` : ""}
+        </div>
+      </div>
+      <dl className="space-y-1 text-sm">
+        <SummaryRow k="Cobros hechos" v={String(r.runs)} />
+        <SummaryRow k="Próximo cobro" v={r.nextRunAt ? new Date(r.nextRunAt).toLocaleString("es-CO", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }) : "—"} />
+      </dl>
+      {r.lastError && (
+        <Alert tone={r.status === "activa" ? "warning" : "error"} title={r.status === "activa" ? "El último cobro falló" : "Pausada"}>
+          {r.lastError}
+        </Alert>
+      )}
+      <Button variant="ghost" className="w-full" disabled={busy} onClick={onCancel}>
+        Cancelar inversión recurrente
+      </Button>
+    </Card>
   );
 }
 

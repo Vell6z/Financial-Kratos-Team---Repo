@@ -1,6 +1,7 @@
 import { handle } from "@/lib/api";
 import { requireAdmin, requireUser } from "@/lib/auth";
 import { emptyDB, withDB } from "@/lib/db";
+import { processRecurring } from "@/lib/recurring";
 import { accrueAll, BusinessError } from "@/lib/services";
 
 /**
@@ -9,8 +10,8 @@ import { accrueAll, BusinessError } from "@/lib/services";
  */
 export async function POST(request: Request) {
   const { action, days, userId } = await request.json();
-  return handle(() =>
-    withDB(async (db) => {
+  return handle(async () => {
+    const result = await withDB(async (db) => {
       requireAdmin(await requireUser(db));
       if (action === "advance") {
         accrueAll(db);
@@ -34,6 +35,9 @@ export async function POST(request: Request) {
         throw new BusinessError("Acción inválida");
       }
       return { ok: true };
-    }),
-  );
+    });
+    // Al adelantar el reloj, las inversiones recurrentes simuladas que vencieron se cobran de una vez
+    if (action === "advance") await processRecurring();
+    return result;
+  });
 }

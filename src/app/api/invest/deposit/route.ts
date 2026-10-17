@@ -1,7 +1,9 @@
 import { handle, parseLevel } from "@/lib/api";
 import { requireRole, requireUser, requireVerifiedIdentity } from "@/lib/auth";
-import { withDB, newId } from "@/lib/db";
-import { isInterledgerEnabled, normalizeWallet, startPayment } from "@/lib/openpayments";
+import { withDB, newId, now } from "@/lib/db";
+import { isInterledgerEnabled, normalizeWallet, recurringInterval, startPayment } from "@/lib/openpayments";
+import { createRecurring, recurringReceipt } from "@/lib/recurring";
+import { intervalLabel } from "@/lib/recurring-interval";
 import { MIN_INVESTMENT } from "@/lib/config";
 import { processPayouts } from "@/lib/payouts";
 import { BusinessError, creditDeposit } from "@/lib/services";
@@ -17,6 +19,8 @@ export async function POST(request: Request) {
   return handle(async () => {
     const level = parseLevel(body.level);
     const amountCop = Number(body.amountCop);
+    // Repetir esta inversión cada intervalo (por defecto, cada mes)
+    const recurring = body.recurring === true;
     const amountError = validateMoney(amountCop, { min: MIN_INVESTMENT });
     if (amountError) throw new BusinessError(amountError);
     const walletError = body.wallet ? validateWallet(String(body.wallet)) : null;
@@ -32,9 +36,18 @@ export async function POST(request: Request) {
     });
 
     if (!isInterledgerEnabled()) {
-      const txId = await withDB((db) => creditDeposit(db, wallet, level, amountCop, "simulado"));
+      const txId = await withDB((db) => {
+        const id = creditDeposit(db, wallet, level, amountCop, "simulado");
+        if (recurring) {
+          // Modo simulado: los cobros siguen el reloj de la demo
+          const subId = createRecurring(db, { wallet, level, mode: "simulado", amountCop, interval: recurringInterval(), start: now(db) });
+          const tx = db.txs.find((t) => t.id === id);
+          if (tx?.receipt) tx.receipt.recurring = recurringReceipt(db.recurring!.find((s) => s.id === subId)!, 1);
+        }
+        return id;
+      });
       void processPayouts();
-      return { status: "completed", mode: "simulado", txId };
+      return { status: "completed", mode: "simulado", txId, recurring: recurring ? { intervalLabel: intervalLabel(recurringInterval()) } : null };
     }
 
     const id = newId();
@@ -44,10 +57,19 @@ export async function POST(request: Request) {
       amountCop,
       finishUrl: `${origin}/api/op/finish/${id}`,
       nonce: crypto.randomUUID(),
+      recurring,
     });
     await withDB((db) => {
       db.pending.push({ id, kind: "deposit", wallet, level, amountCop, createdAt: Date.now(), ...started });
     });
-    return { status: "pending", redirectUrl: started.redirectUrl, debit: started.debit, receive: started.receive, quote: started.quote };
+    return {
+      status: "pending",
+      redirectUrl: started.redirectUrl,
+      debit: started.debit,
+      receive: started.receive,
+      quote: started.quote,
+      // El permiso que aprueba en la wallet: este monto en su moneda, cada intervalo
+      recurring: started.recurring ? { intervalLabel: intervalLabel(started.recurring.interval) } : null,
+    };
   });
 }

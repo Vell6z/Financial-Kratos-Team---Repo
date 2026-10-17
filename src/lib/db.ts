@@ -59,6 +59,8 @@ export interface TxReceipt {
   maturesAt?: number;
   /** Aporte precargado para la demo: no pasó por Interledger */
   demo?: boolean;
+  /** Cobro de una inversión recurrente (número de cobro, el primero es 1) */
+  recurring?: { id: string; run: number; interval: string };
 }
 
 /** "Cajita" del inversionista en un nivel de riesgo */
@@ -218,7 +220,43 @@ export interface PendingPayment {
   authServer?: string;
   quote?: QuoteView;
   incoming?: IncomingRef;
+  /** Inversión recurrente: intervalo, inicio y monto fijo del permiso */
+  recurring?: { interval: string; start: string; debitAmount: { value: string; assetCode: string; assetScale: number } };
   createdAt: number;
+}
+
+/**
+ * Inversión recurrente: cada intervalo se invierte de nuevo en la misma cajita.
+ * Con Interledger, el inversionista aprobó un permiso con intervalo y se le debita el mismo monto en su moneda;
+ * en modo simulado se repite el mismo monto en pesos según el reloj de la demo.
+ */
+export interface RecurringInvestment {
+  id: string;
+  wallet: string;
+  level: Level;
+  mode: "interledger" | "simulado";
+  /** Monto en pesos del primer aporte (en modo simulado, el de cada cobro) */
+  amountCop: number;
+  /** Monto fijo que se debita en cada intervalo, en la moneda de la wallet del inversionista */
+  debitAmount?: { value: string; assetCode: string; assetScale: number };
+  /** ISO 8601, por ejemplo P1M */
+  interval: string;
+  /** Inicio del permiso (ms, hora real con Interledger u hora de la demo en modo simulado) */
+  start: number;
+  grant?: { accessToken: string; manageUrl: string; tokenExpiresAt: number | null };
+  status: "activa" | "pausada" | "cancelada";
+  /** Cobros hechos, incluido el primero */
+  runs: number;
+  /** Próximo cobro: hora real (Interledger) u hora de la demo (simulado) */
+  nextRunAt: number;
+  /** Tras un fallo, no se reintenta antes de esta hora real */
+  retryAt?: number;
+  lastRunAt?: number;
+  lastError?: string;
+  /** Evita cobrar dos veces si dos peticiones lo procesan a la vez */
+  runningSince?: number;
+  createdAt: number;
+  canceledAt?: number;
 }
 
 /** Resultado de la verificación facial del registro, sin imágenes. Para auditoría y revisión del admin. */
@@ -343,6 +381,8 @@ export interface DB {
   brebVerifications: BrebVerification[];
   vaultGrant?: VaultGrant | null;
   pendingVaultGrant?: PendingVaultGrant | null;
+  /** Inversiones recurrentes (src/lib/recurring.ts) */
+  recurring?: RecurringInvestment[];
   /** Versión de las inversiones precargadas de la cuenta demo (src/lib/demo-seed.ts). `true` = versión 1 */
   demoSeeded?: number | boolean;
 }

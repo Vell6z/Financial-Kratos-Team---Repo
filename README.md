@@ -35,6 +35,9 @@ Inversionista ──Interledger──▶ Bóveda (cajita por nivel) ──Bre-B�
   Puede sacar todo lo de los aportes que cumplieron su plazo y hasta el **50 %** de cada aporte que sigue en plazo (sumando lo
   que ya sacó de él). Los retiros salen primero de los aportes vencidos, del más antiguo al más nuevo.
   Máximo **US$30.000 por retiro**, pasado a pesos con la tasa de mercado del dólar. Siempre sujeto a la liquidez del pool.
+- **Inversión recurrente**: antes de invertir se puede elegir "Repetir cada mes". En la wallet se aprueba una sola vez un
+  permiso de Open Payments con intervalo (el mismo monto, en la moneda de la wallet, cada mes); cada cobro entra a la cajita
+  como un aporte nuevo. Se cancela desde `/invertir` (se revoca el permiso). `OP_RECURRING_INTERVAL` cambia la frecuencia.
 - **Capital semilla**: 50 M COP repartidos 20 / 17 / 13 M entre los pools (supuesto).
 - **Créditos**: mínimo 2 cuotas, una cada 15 días contados desde el desembolso, con cuota fija (sistema francés). Si el pool no tiene fondos el crédito queda **en espera de fondeo** y se desembolsa cuando entra dinero.
 - **Estudio de crédito** (`/estudio`): obligatorio para el acreditado antes de usar la app. 6 pasos; el servidor calcula un puntaje 0–100 con factor de confianza (declarado ×0,5, documento ×0,8, confirmado ×1), cruces de coherencia y exclusiones, y asigna nivel 1, 2, 3 o 4 (no apto, reintento en 60 días). Explicación completa en [`docs/modelo-de-riesgo.md`](docs/modelo-de-riesgo.md).

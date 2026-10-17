@@ -23,6 +23,7 @@ export async function GET() {
           // Comprobante en PDF (/api/receipts/[id])
           hasReceipt: hasReceipt(db, tx),
           partial: Boolean(tx.receipt && tx.receipt.requestedCop !== tx.amountCop),
+          recurring: Boolean(tx.receipt?.recurring),
         })),
       };
     }),

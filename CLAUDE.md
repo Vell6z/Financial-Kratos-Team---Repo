@@ -44,7 +44,9 @@ python3 ml/train_baseline.py   # entrena el modelo base y escribe ml/modelo/regr
 - `openpayments.ts` — Open Payments: inversión (inversionista → bóveda) y retiro (bóveda → inversionista):
   - grants interactivos con verificación del `hash` GNAP;
   - confirmación en la wallet que recibe (`confirmIncoming`): se abona o descuenta lo que llegó al *incoming payment*, que luego se cierra;
-  - permiso de retiros automáticos de la bóveda (`startVaultGrant` / `sendFromVault`), con rotación de token.
+  - permiso de retiros automáticos de la bóveda (`startVaultGrant` / `sendFromVault`), con rotación de token;
+  - inversiones recurrentes: grant con `interval` (`R/inicio/P1M`) y cobro mensual con ese permiso (`chargeRecurring`).
+- `recurring.ts` — inversiones recurrentes: crear, cobrar las vencidas (`processRecurring`, se llama al abrir `/invertir` o `/boveda` y al adelantar el reloj) y cancelar. `recurring-interval.ts`: intervalos ISO 8601 (compartido).
 - `fx.ts` — tasa de mercado COP ↔ moneda de la bóveda (open.er-api.com, caché 1 h) y máximo por retiro en USD → COP.
 - `breb.ts` — resolver llaves Bre-B en el directorio de Wompi (**solo GET**). `breb-keys.ts`: tipos y formato de llaves (compartido).
 - `breb-qr.ts` — lector EMVCo de QR Bre-B, estricto (CRC, plantilla `CO.COM.RBM.LLA`, una sola llave).
@@ -92,6 +94,7 @@ python3 ml/train_baseline.py   # entrena el modelo base y escribe ml/modelo/regr
 - Capital semilla de $50 M (supuesto).
 - Cada inversión es un **aporte que dura un año** (en cualquier nivel, `INVESTMENT_TERM_DAYS`): antes del año se puede sacar como máximo el 50 % de ese aporte. Los retiros salen primero de los aportes vencidos.
 - Máximo **US$30.000 por retiro**, pasado a COP con la tasa del día.
+- **Inversión recurrente** (opcional): con Interledger se debita el mismo monto en la moneda de la wallet cada mes, en hora real (lo controla la wallet; adelantar el reloj de la demo no cobra antes); en modo simulado se repite el monto en pesos según el reloj de la demo. Si el permiso deja de servir, queda pausada.
 - El pago vale por lo que confirma **la wallet que recibe**. Si llega solo una parte, se abona esa parte (o, en un retiro, el resto vuelve a la cajita).
 
 **Estudio y modelo de riesgo**
@@ -131,7 +134,8 @@ Wallets de prueba (en `.env`, no en el código):
 - **Open Payments:**
   - `OP_PLATFORM_WALLET_ADDRESS`, `OP_KEY_ID`, `OP_PRIVATE_KEY_PATH` (`./secrets/private.key`);
   - `OP_VAULT_WALLET_ADDRESS`, `OP_DEMO_INVESTOR_WALLET`;
-  - `OP_VAULT_GRANT_LIMIT_USD` (tope del permiso de la bóveda) y, opcional, `OP_COP_PER_UNIT` (fija la tasa a mano).
+  - `OP_VAULT_GRANT_LIMIT_USD` (tope del permiso de la bóveda) y, opcional, `OP_COP_PER_UNIT` (fija la tasa a mano);
+  - `OP_RECURRING_INTERVAL` (opcional): frecuencia de las inversiones recurrentes, por defecto `P1M`; `PT5M` para mostrarlo en la demo.
 - **Wompi:**
   - `WOMPI_RESOLVE_ENV` (o `WOMPI_ENV`) = `sandbox` o `production` para la consulta de llaves;
   - credenciales `WOMPI_PAYOUT_*` / `WOMPI_SANDBOX_*` (sandbox) y `WOMPI_PROD_*` (producción, **solo para resolver llaves**).
