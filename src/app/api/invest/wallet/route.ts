@@ -1,3 +1,4 @@
+import { actorOf, audit } from "@/lib/audit";
 import { handle } from "@/lib/api";
 import { requireRole, requireUser } from "@/lib/auth";
 import { withDB } from "@/lib/db";
@@ -12,7 +13,16 @@ export async function PUT(request: Request) {
     return withDB(async (db) => {
       const user = await requireUser(db);
       requireRole(user, "inversor");
+      const previous = user.wallet ?? null;
       changeInvestorWallet(db, user, wallet);
+      audit(db, {
+        category: "inversion",
+        action: "wallet_cambiada",
+        actor: actorOf(user),
+        entity: { type: "usuario", id: user.id },
+        summary: `Cambió su wallet de Interledger`,
+        data: { anterior: previous, nueva: wallet },
+      });
       return { wallet };
     });
   });

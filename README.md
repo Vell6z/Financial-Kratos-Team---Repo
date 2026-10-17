@@ -176,8 +176,10 @@ Ya vienen con datos para mostrar todo sin esperar:
 - El acreditado tiene el estudio hecho, un crédito **pagado** (con paz y salvo, que lo subió de nivel) y un crédito **activo**
   con una cuota por pagar.
 
-El operador entra a `/boveda`: liquidez de los pools, cartera, permiso de retiros, revisión de verificaciones faciales y los
-controles de demo. **Reiniciar demo** borra inversiones, créditos y movimientos, y vuelve a cargar los datos demo con la fecha de
+El operador entra a `/boveda`, organizado en secciones: **Resumen** (alertas, indicadores de cartera y mora, pools con encaje,
+bóveda y controles de demo), **Cartera**, **Usuarios** (verificación de identidad, suspender y reactivar cuentas), **Inversiones**
+(cajitas y recurrentes), **Movimientos** y **Auditoría**. La bitácora registra quién hizo qué y cuándo en todos los flujos y está
+encadenada por hash (si alguien edita o borra un evento, el panel lo detecta); todo se exporta a CSV. **Reiniciar demo** borra inversiones, créditos y movimientos, y vuelve a cargar los datos demo con la fecha de
 hoy (conserva las cuentas y el permiso de la bóveda). **+15 días / +1 año** adelanta el reloj para ver crecer las cajitas y vencer
 cuotas.
 

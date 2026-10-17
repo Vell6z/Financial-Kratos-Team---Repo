@@ -7,7 +7,7 @@ import { BrebQrScanner } from "@/components/breb-qr-scanner";
 import { ConfirmDialog, useToast } from "@/components/feedback";
 import { Alert, Badge, Button, Card, Choice, Input, MoneyInput, PageHeader, Spinner, api } from "@/components/ui";
 import { bankName, BREB_KEY_TYPE_IDS, BREB_KEY_TYPES, SANDBOX_KEYS, brebKeyFormatError, detectBrebKeyType, normalizeBrebKey, type BrebKeyType } from "@/lib/breb-keys";
-import { CREDIT_PURPOSES, DELINQUENCY, INSTALLMENT_DAYS, LEVELS, MIN_INSTALLMENTS, MIN_LOAN, type CreditPurpose, type Level } from "@/lib/config";
+import { CREDIT_PURPOSES, creditTypeLabel, DELINQUENCY, INSTALLMENT_DAYS, LEVELS, MIN_INSTALLMENTS, MIN_LOAN, type CreditPurpose, type Level } from "@/lib/config";
 import { buildSchedule, cop, pct } from "@/lib/finance";
 import { creditLimit } from "@/lib/scoring";
 import { validateMoney } from "@/lib/validators";
@@ -115,7 +115,7 @@ function LoanOffer({ evaluation, defaultLlave, onDone }: { evaluation: Evaluatio
   const [touched, setTouched] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  // Crédito productivo: para qué lo usará, y la aceptación del contrato y el pagaré (simulados)
+  // Para qué lo usará (negocio u hogar), y la aceptación del contrato y el pagaré (simulados)
   const [purpose, setPurpose] = useState<CreditPurpose | "">("");
   const [contractOpen, setContractOpen] = useState(false);
   const [accepted, setAccepted] = useState(false);
@@ -318,14 +318,29 @@ function LoanOffer({ evaluation, defaultLlave, onDone }: { evaluation: Evaluatio
               </p>
             )}
           </div>
-          <Choice
-            label="¿Para qué vas a usar el crédito?"
-            required
-            value={purpose}
-            onChange={setPurpose}
-            options={CREDIT_PURPOSES.map((p) => ({ id: p.id, title: p.title, sub: p.sub }))}
-            error={touched && !purpose ? "Elige para qué lo usarás: es un crédito para tu negocio o tu trabajo" : null}
-          />
+          <div className="space-y-3">
+            <div className="text-sm">
+              <span className="font-medium">
+                ¿Para qué vas a usar el crédito?<span className="text-red-500" aria-hidden="true"> *</span>
+              </span>
+              <p className="text-xs text-muted">Puede ser para tu negocio o para ti y tu hogar.</p>
+            </div>
+            {(
+              [
+                ["productivo", "Para tu negocio o trabajo"],
+                ["consumo", "Para ti y tu hogar"],
+              ] as const
+            ).map(([kind, label]) => (
+              <Choice
+                key={kind}
+                label={label}
+                value={CREDIT_PURPOSES.some((p) => p.id === purpose && p.kind === kind) ? purpose : ""}
+                onChange={setPurpose}
+                options={CREDIT_PURPOSES.filter((p) => p.kind === kind).map((p) => ({ id: p.id, title: p.title, sub: p.sub }))}
+              />
+            ))}
+            {touched && !purpose && <p className="text-xs text-red-600 dark:text-red-400">● Elige para qué lo usarás</p>}
+          </div>
         </Card>
 
         <Card className="h-fit space-y-4 p-6 lg:sticky lg:top-20">
@@ -417,7 +432,7 @@ function LoanOffer({ evaluation, defaultLlave, onDone }: { evaluation: Evaluatio
             SIMULACIÓN: documento de demostración, sin validez legal.
           </p>
           <dl className="space-y-1.5 rounded-lg bg-brand-soft p-3">
-            <BeneficiaryRow k="Tipo" v="Microcrédito productivo" />
+            <BeneficiaryRow k="Tipo" v={creditTypeLabel(purpose)} />
             <BeneficiaryRow k="Destino" v={CREDIT_PURPOSES.find((p) => p.id === purpose)?.title ?? "—"} />
             <BeneficiaryRow k="Monto" v={cop(value)} />
             <BeneficiaryRow k="Tasa" v={`${pct(cfg.rateEA)} efectiva anual, fija`} />

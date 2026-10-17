@@ -192,7 +192,7 @@ Con el ajuste, el nivel 1 pasa de 111 a 1.428 personas con 1,5 % de mora: las re
 - Estados de cada cuota: `PENDIENTE` → `POR_PAGAR` (días 0 a 3) → `PAGADA`, o `EN_MORA` (desde el día 4) → `PAGADA_CON_MORA`. Los días de atraso se cuentan **desde el vencimiento**. Sin interés de mora.
 - Nivel del siguiente crédito según el **peor atraso** del último crédito: 0–3 días sube · 4–15 se mantiene · 16–30 baja · 31–89 nivel 4 mientras deba (luego nivel 3) · 90 o más nivel 4 y bloqueado 12 meses. Con historial, el nivel sale de esta regla y no del estudio.
 - **Día 70 de mora:** aviso previo de reporte a centrales de riesgo. **Día 90:** reporte **simulado** (no se envía a ninguna central), castigo del crédito y bloqueo de 12 meses. Si paga después, el reporte pasa a "obligación pagada" y el bloqueo se mantiene.
-- Antes de solicitar, el acreditado elige el **destino** del crédito (productivo) y acepta el contrato y el pagaré (simulados).
+- Antes de solicitar, el acreditado elige el **destino** del crédito, para su negocio (productivo) o para él y su hogar (consumo), y acepta el contrato y el pagaré (simulados).
 
 ## 8. Perfiles de prueba (resultados del modelo en esta app)
 
@@ -232,6 +232,6 @@ Las diferencias de 1 a 3 puntos frente al documento del equipo vienen de las res
 - Todo lo simulado se rotula como simulado en la interfaz.
 
 **Pendientes conocidos:**
-- El crédito se presenta como **productivo** (pregunta de destino y contrato simulado); verificar el tope de usura vigente en la Superfinanciera antes del pitch.
+- El destino define el tipo: **productivo** (negocio) o **consumo** (hogar, salud, educación…). El tope de usura de consumo es más bajo que el de microcrédito: verificar los topes vigentes en la Superfinanciera antes del pitch.
 - Conectar el desembolso y el cobro de cuotas con Open Payments (hoy Bre-B simulado).
 - Confirmación real de referencias: los casos "no la conoce" (X3) y "no cumple" están descritos pero aún no se disparan; hay un gancho marcado en `computeStudy`.

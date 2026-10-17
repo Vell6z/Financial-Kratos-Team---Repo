@@ -1,3 +1,4 @@
+import { audit, ownerActor, SYSTEM } from "@/lib/audit";
 import type { NextRequest } from "next/server";
 import { withDB } from "@/lib/db";
 import { publicOrigin } from "@/lib/origin";
@@ -24,9 +25,28 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   });
   if (!pending) return back("error", "El pago ya fue procesado o expiró");
 
+  // Trazabilidad de los pagos que no se completan (los completados los registra creditDeposit / debitWithdraw)
+  const kind = pending.kind === "deposit" ? "inversión" : "retiro";
+  const fail = (action: string, summary: string) =>
+    withDB((db) =>
+      audit(db, {
+        category: "inversion",
+        action,
+        actor: pending.kind === "deposit" ? ownerActor(db, { wallet: pending.wallet }) : SYSTEM,
+        summary,
+        data: { monto: pending.amountCop, nivel: pending.level, tipo: pending.kind },
+      }),
+    );
+
   const interactRef = q.get("interact_ref");
-  if (q.get("result") === "grant_rejected" || !interactRef) return back("rechazado");
-  if (!verifyInteractHash(pending, interactRef, q.get("hash"))) return back("error", "No pudimos verificar la aprobación del pago");
+  if (q.get("result") === "grant_rejected" || !interactRef) {
+    await fail("pago_rechazado_en_wallet", `No se aprobó en la wallet la ${kind} de ${pending.amountCop.toLocaleString("es-CO")} pesos`);
+    return back("rechazado");
+  }
+  if (!verifyInteractHash(pending, interactRef, q.get("hash"))) {
+    await fail("aprobacion_no_verificada", `La vuelta de la wallet no pasó la verificación del hash GNAP (${kind})`);
+    return back("error", "No pudimos verificar la aprobación del pago");
+  }
 
   try {
     const { confirmation, token } = await finishPayment({ ...pending, interactRef });
@@ -67,6 +87,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     return back(pending.kind === "deposit" ? "invertido" : "retirado", undefined, txId);
   } catch (err) {
     console.error(err);
+    await fail("pago_fallido", `No se completó la ${kind}: ${err instanceof Error ? err.message : "error de Interledger"}`).catch(() => {});
     return back("error", err instanceof Error ? err.message : "Error completando el pago");
   }
 }

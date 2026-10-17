@@ -1,3 +1,4 @@
+import { actorOf, audit } from "@/lib/audit";
 import { handle } from "@/lib/api";
 import { publicOrigin } from "@/lib/origin";
 import { requireAdmin, requireUser } from "@/lib/auth";
@@ -23,9 +24,11 @@ export async function POST(request: Request) {
 export async function DELETE() {
   return handle(async () => {
     const grant = await withDB(async (db) => {
-      requireAdmin(await requireUser(db));
+      const admin = await requireUser(db);
+      requireAdmin(admin);
       const g = db.vaultGrant;
       db.vaultGrant = null;
+      if (g) audit(db, { category: "boveda", action: "permiso_boveda_revocado", actor: actorOf(admin), entity: { type: "boveda", id: "permiso" }, summary: "Revocó el permiso de retiros automáticos de la bóveda" });
       return g;
     });
     if (grant) await revokeVaultGrant(grant);

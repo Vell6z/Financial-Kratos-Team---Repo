@@ -1,3 +1,4 @@
+import { audit } from "@/lib/audit";
 import type { NextRequest } from "next/server";
 import { withDB } from "@/lib/db";
 import { publicOrigin } from "@/lib/origin";
@@ -29,6 +30,15 @@ export async function GET(request: NextRequest) {
     const previous = await withDB((db) => {
       const old = db.vaultGrant;
       db.vaultGrant = grant;
+      const limit = Number(grant.limit.value) / 10 ** grant.limit.assetScale;
+      audit(db, {
+        category: "boveda",
+        action: old ? "permiso_boveda_renovado" : "permiso_boveda_autorizado",
+        actor: { type: "operador", name: "Operador (aprobó en la wallet de la bóveda)" },
+        entity: { type: "boveda", id: "permiso" },
+        summary: `${old ? "Renovó" : "Autorizó"} los retiros automáticos de la bóveda hasta ${limit.toLocaleString("es-CO")} ${grant.limit.assetCode}`,
+        data: { tope: limit, moneda: grant.limit.assetCode },
+      });
       return old;
     });
     // Al renovar, el permiso anterior se revoca

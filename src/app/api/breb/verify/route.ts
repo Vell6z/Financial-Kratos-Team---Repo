@@ -1,3 +1,4 @@
+import { actorOf, audit } from "@/lib/audit";
 import { handle } from "@/lib/api";
 import { requireRole, requireUser, requireVerifiedIdentity } from "@/lib/auth";
 import { brebMode, holderMatches, resolveBrebKey } from "@/lib/breb";
@@ -53,6 +54,14 @@ export async function POST(request: Request) {
         expiresAt: t + TTL_MS,
       };
       db.brebVerifications.push(v);
+      audit(db, {
+        category: "credito",
+        action: "llave_breb_verificada",
+        actor: actorOf(user),
+        entity: { type: "usuario", id: user.id },
+        summary: `Consultó su llave Bre-B en el directorio (${r.mode}): titular ${r.holderName} · ${r.financialEntity.name}`,
+        data: { tipo: r.keyType, directorio: r.mode, coincideNombre: v.nameMatches },
+      });
       // Al navegador no van el usuario ni el estado interno
       return { id: v.id, key: v.key, keyType: v.keyType, holderName: v.holderName, financialEntity: v.financialEntity, nameMatches: v.nameMatches, mode: v.mode, expiresAt: v.expiresAt };
     });

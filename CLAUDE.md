@@ -54,7 +54,8 @@ python3 ml/train_baseline.py   # entrena el modelo base y escribe ml/modelo/regr
 - `doc-reader.ts` — lectura de documentos del estudio con **Gemini**; sin `GEMINI_API_KEY` usa trucos en el nombre del archivo.
 
 **Soporte**
-- `auth.ts` (sesión por cookie `kratos_session`, `requireUser` / `requireRole` / `requireAdmin` / `requirePageRole`), `password.ts` (scrypt).
+- `auth.ts` (sesión por cookie `kratos_session`, `requireUser` / `requireRole` / `requireAdmin` / `requirePageRole`; las cuentas suspendidas por el operador no entran), `password.ts` (scrypt).
+- `audit.ts` — **bitácora de auditoría** (`db.audit`): quién, qué, sobre qué, cuándo (hora real y de la demo), datos clave e IP. Cada evento lleva el hash SHA-256 del anterior (JSON canónico, porque Supabase reordena las claves): `verifyAuditChain` detecta eventos editados o borrados. Máximo 3000 eventos. `toCsv` para exportar.
 - `validators.ts` (validaciones compartidas navegador/servidor), `registration.ts`, `notifications.ts`, `dashboard.ts`, `nav.ts`, `api.ts` (`handle()` convierte errores en JSON).
 - Documentos PDF, sin dependencias:
   - `pdf.ts` genera el archivo y `pdf-doc.ts` da el diseño común (encabezado, secciones, tablas, pie);
@@ -69,7 +70,13 @@ python3 ml/train_baseline.py   # entrena el modelo base y escribe ml/modelo/regr
 - `/inicio` (home por rol) y `/movimientos`.
 - Acreditado: `/estudio` (obligatorio antes de pedir crédito), `/credito` (oferta, llave Bre-B, escáner QR), `/mi-credito` (cuotas, simulador de pago Bre-B, comprobante de desembolso).
 - Inversionista: `/invertir` (cotización Interledger, cajitas con aportes).
-- Operador: `/boveda` (pools, cartera, permiso de retiros automáticos, recaudo Bre-B, reloj de la demo).
+- Operador: `/boveda`, con secciones (`src/app/boveda/sections/`, pestaña en `?seccion=`):
+  - **Resumen**: alertas, indicadores (cartera, mora, mora > 30 días, desembolsado, recaudado), pools con encaje, bóveda, reportes, reloj y actividad reciente;
+  - **Cartera**: créditos con filtros, cuotas, estados del desembolso, documentos y su traza;
+  - **Usuarios**: verificación de identidad, suspender y reactivar (con motivo) y la traza de cada usuario;
+  - **Inversiones**: cajitas por inversionista y recurrentes (el operador puede cancelarlas con motivo);
+  - **Movimientos**: filtros y comprobantes; **Auditoría**: bitácora con filtros, integridad de la cadena y CSV.
+  - APIs: `/api/state` (solo lectura), `/api/admin` (acciones), `/api/admin/audit`, `/api/admin/export?tipo=movimientos|cartera|usuarios`.
 - APIs en `src/app/api/*`.
 
 **Otros**
@@ -95,7 +102,7 @@ Decisiones del área financiera (17-oct-2026), en `config.ts`:
 - Mínimo **2 cuotas**, una **cada 15 días** contados desde el desembolso (no por quincenas del calendario), sistema francés. `MIN_INSTALLMENTS` en `config.ts`.
 - Cupo = el menor entre el techo del nivel y el valor presente de la cuota máxima (50 % de lo que le sobra cada 15 días).
 - Si el pool no tiene capital (respetando el encaje), el crédito queda **en espera de fondeo**.
-- Crédito **productivo**: antes de solicitar elige el destino (`CREDIT_PURPOSES`) y acepta el contrato y el pagaré (simulados).
+- **Destino** del crédito (`CREDIT_PURPOSES`): para el negocio o el trabajo (microcrédito productivo) o para la persona y su hogar (crédito de consumo: hogar, salud, educación, vivienda, emergencia, pagar una deuda cara). El tipo (`creditTypeLabel`) va en el contrato y en el reporte. Antes de solicitar acepta el contrato y el pagaré (simulados). Ojo: el tope de usura de consumo es más bajo.
 - **Solicitud de pago**: el día del vencimiento, 3 días para pagar (`DELINQUENCY.daysToPay`). Estados `PENDIENTE`, `POR_PAGAR`, `PAGADA`, `EN_MORA` (desde el día 4), `PAGADA_CON_MORA`. Atraso contado desde el vencimiento. Sin interés de mora. Sin pago anticipado con descuento.
 - **Nivel del siguiente crédito** por el peor atraso (`LEVEL_CHANGE`): 0–3 días sube, 4–15 se mantiene, 16–30 baja, 31–89 nivel 4 mientras deba (luego 3), 90+ nivel 4 y bloqueado 12 meses. Con historial manda el historial, no el estudio.
 - **Día 70** de mora: aviso previo. **Día 90**: reporte **simulado** a centrales de riesgo ("SIMULACIÓN: …"), castigo y bloqueo; si paga después, "obligación pagada". Solo datos de la obligación (Ley 1581).
@@ -159,6 +166,11 @@ Wallets de prueba (en `.env`, no en el código):
 - **Nunca** subir a git `.env`, `secrets/`, `data/` ni llaves. El `.gitignore` ya los cubre; revisar antes de cada commit.
 - Las credenciales `WOMPI_PROD_*` son de **producción**. Solo se usan para `GET /breb/keys/resolve`. **Jamás** usarlas para `POST /payouts` ni para nada que mueva dinero.
 - No imprimir secretos ni tokens en consola, logs o respuestas. No registrar el contenido completo de un QR.
+
+**Trazabilidad**
+- Todo cambio con dinero, identidad, datos o acciones del operador registra un evento con `audit(db, …)` **dentro del mismo `withDB`** que hace el cambio (si la transacción se reintenta, el evento también).
+- Los movimientos de dinero se registran en `services.ts` (abonos, retiros, solicitudes, desembolsos, pagos); los procesos automáticos (mora, nivel, recurrentes) con el actor `SYSTEM`.
+- Nunca guardar en la bitácora contraseñas, tokens, documentos, descriptores faciales ni respuestas del estudio.
 
 **Lógica de negocio**
 - Puntajes, cupos, plazos y montos se validan **en el servidor**. El navegador solo muestra y pre-valida.

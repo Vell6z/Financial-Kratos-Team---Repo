@@ -1,3 +1,4 @@
+import { audit, ownerActor, SYSTEM, type AuditEvent } from "./audit";
 import "server-only";
 import { LEVELS, type Level } from "./config";
 import { type DB, newId, now, type RecurringInvestment, type TxReceipt, withDB } from "./db";
@@ -44,6 +45,14 @@ export function createRecurring(
   };
   sub.nextRunAt = nextRun(sub, 1);
   subs(db).push(sub);
+  audit(db, {
+    category: "inversion",
+    action: "recurrente_creada",
+    actor: ownerActor(db, { wallet: opts.wallet }),
+    entity: { type: "recurrente", id: sub.id },
+    summary: `Activó una inversión recurrente de ${opts.debitAmount ? `${Number(opts.debitAmount.value) / 10 ** opts.debitAmount.assetScale} ${opts.debitAmount.assetCode}` : cop(opts.amountCop)} ${intervalLabel(opts.interval)} en ${LEVELS[opts.level].name}`,
+    data: { nivel: opts.level, modo: opts.mode, intervalo: opts.interval },
+  });
   return sub.id;
 }
 
@@ -71,12 +80,21 @@ export function recurringView(db: DB, wallet: string) {
 }
 
 /** El inversionista cancela: se revoca el permiso en su wallet y no se cobra más */
-export async function cancelRecurring(wallet: string, id: string) {
+export async function cancelRecurring(wallet: string | null, id: string, actor?: AuditEvent["actor"], reason?: string) {
   const sub = await withDB((db) => {
-    const s = subs(db).find((x) => x.id === id && x.wallet === wallet && x.status !== "cancelada");
+    // wallet null: la cancela el operador (cualquier inversionista)
+    const s = subs(db).find((x) => x.id === id && (wallet === null || x.wallet === wallet) && x.status !== "cancelada");
     if (!s) throw new BusinessError("No encontramos esa inversión recurrente");
     s.status = "cancelada";
     s.canceledAt = now(db);
+    audit(db, {
+      category: "inversion",
+      action: wallet === null ? "recurrente_cancelada_por_operador" : "recurrente_cancelada",
+      actor: actor ?? ownerActor(db, { wallet: s.wallet }),
+      entity: { type: "recurrente", id: s.id },
+      summary: `Canceló la inversión recurrente en ${LEVELS[s.level].name} y se revocó el permiso${reason ? ` · motivo: ${reason}` : ""}`,
+      data: { cobrosHechos: s.runs },
+    });
     const copy = { ...s };
     delete s.grant; // el token ya no se necesita
     return copy;
@@ -164,6 +182,13 @@ async function chargeOne(s: RecurringInvestment) {
       // Sin permiso válido no tiene sentido reintentar: queda pausada hasta que el inversionista la active de nuevo
       if (err instanceof RecurringGrantError) sub.status = "pausada";
       else sub.retryAt = Date.now() + RETRY_MS;
+      audit(db, {
+        category: "inversion",
+        action: err instanceof RecurringGrantError ? "recurrente_pausada" : "cobro_recurrente_fallido",
+        actor: SYSTEM,
+        entity: { type: "recurrente", id: sub.id },
+        summary: `Cobro recurrente no realizado: ${message}`,
+      });
     });
   }
 }

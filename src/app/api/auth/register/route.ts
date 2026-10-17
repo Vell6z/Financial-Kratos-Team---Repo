@@ -1,3 +1,4 @@
+import { actorOf, audit, requestIp } from "@/lib/audit";
 import { handle } from "@/lib/api";
 import { checkRegistration, register, setSessionCookie, toPublic } from "@/lib/auth";
 import { removeUploads, saveUpload } from "@/lib/uploads";
@@ -104,6 +105,17 @@ export async function POST(request: Request) {
           face: { verification, descriptor: encryptDescriptor(descriptor), check },
         });
       });
+      await withDB((db) =>
+        audit(db, {
+          category: "identidad",
+          action: "cuenta_registrada",
+          actor: actorOf(user),
+          entity: { type: "usuario", id: user.id },
+          summary: `Se registró como ${user.role === "inversor" ? "inversionista" : "acreditado"} · verificación facial ${user.faceVerification}`,
+          data: { rol: user.role, verificacionFacial: user.faceVerification, revision: user.faceCheck?.reviewReason ?? null },
+          ip: requestIp(request),
+        }),
+      );
       await setSessionCookie(token);
       return toPublic(user);
     } catch (err) {

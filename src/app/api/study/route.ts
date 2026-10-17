@@ -1,3 +1,4 @@
+import { actorOf, audit } from "@/lib/audit";
 import { handle } from "@/lib/api";
 import { requireRole, requireUser } from "@/lib/auth";
 import { saveUpload } from "@/lib/uploads";
@@ -56,6 +57,24 @@ export async function POST(request: Request) {
     // Lectura con IA (Gemini) si hay GEMINI_API_KEY; si no, trucos en el nombre del archivo
     const readings = await readDocuments(uploads);
 
-    return withDB((db) => saveStudy(db, user.cedula, user.name, user.age, answers, docs, readings));
+    return withDB((db) => {
+      const result = saveStudy(db, user.cedula, user.name, user.age, answers, docs, readings);
+      const a = db.applicants.find((x) => x.cedula === user.cedula);
+      audit(db, {
+        category: "estudio",
+        action: "estudio_realizado",
+        actor: actorOf(user),
+        entity: { type: "usuario", id: user.id },
+        summary: `Estudio de crédito: puntaje ${a?.score ?? "—"}/100 · ${a?.riskLevel === 4 ? "no apto por ahora" : `nivel ${a?.scoreLevel ?? "—"}`}`,
+        data: {
+          puntaje: a?.score ?? null,
+          nivel: a?.riskLevel ?? null,
+          ajusteML: a?.ml?.adjustment ?? null,
+          documentos: Object.keys(docs).length,
+          lectura: readings ? Object.values(readings)[0]?.source ?? null : null,
+        },
+      });
+      return result;
+    });
   });
 }

@@ -23,7 +23,7 @@ export const NAV: Record<AccountRole, NavItem[]> = {
     { href: "/mi-credito", label: "Mi crédito", description: "Cuotas y pagos por Bre-B", icon: "card" },
     { href: "/movimientos", label: "Movimientos", description: "Desembolsos y pagos", icon: "list" },
   ],
-  admin: [{ href: "/boveda", label: "Panel del operador", description: "Pools, cartera y movimientos", icon: "vault" }],
+  admin: [{ href: "/boveda", label: "Panel del operador", description: "Cartera, usuarios, inversiones y auditoría", icon: "vault" }],
 };
 
 export const ROLE_LABEL: Record<AccountRole, string> = {

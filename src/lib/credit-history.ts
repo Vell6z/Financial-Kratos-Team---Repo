@@ -1,4 +1,5 @@
-import { DAY_MS, DELINQUENCY, LEVEL_CHANGE, type Level } from "./config";
+import { audit, SYSTEM } from "./audit";
+import { creditTypeLabel, DAY_MS, DELINQUENCY, LEVEL_CHANGE, type Level } from "./config";
 import type { Applicant, DB, Loan } from "./db";
 import type { Installment } from "./finance";
 import { addDuration } from "./recurring-interval";
@@ -87,7 +88,18 @@ export function closeLoanHistory(db: DB, loan: Loan, t: number) {
   if (next.blockMonths && !(a.blockedUntil && a.blockedUntil > t)) a.blockedUntil = addDuration(t, `P${next.blockMonths}M`);
   if (worst <= LEVEL_CHANGE.graceDays) a.paidOnTime += 1;
   a.lastLoanResult = { loanId: loan.id, worstDelay: worst, from: loan.level, to: next.level, closedAt: t };
-  if (loan.creditReport?.status === "en_mora") Object.assign(loan.creditReport, { status: "pagada", paidAt: t });
+  audit(db, {
+    category: "credito",
+    action: "credito_pagado",
+    actor: SYSTEM,
+    entity: { type: "credito", id: loan.id },
+    summary: `Crédito pagado completo · peor atraso ${worst} días · siguiente crédito: ${next.level === 4 ? (next.blockMonths ? "bloqueado 12 meses" : "nivel 3 (estuvo en mora de más de 30 días)") : `nivel ${next.level}`}`,
+    data: { peorAtraso: worst, nivelAnterior: loan.level, nivelSiguiente: a.historyLevel, bloqueoMeses: next.blockMonths },
+  });
+  if (loan.creditReport?.status === "en_mora") {
+    Object.assign(loan.creditReport, { status: "pagada", paidAt: t });
+    audit(db, { category: "mora", action: "reporte_actualizado_pagada", actor: SYSTEM, entity: { type: "credito", id: loan.id }, summary: "Reporte (simulado) actualizado a obligación pagada; el bloqueo se mantiene" });
+  }
   else if (loan.creditReport?.status === "aviso") loan.creditReport.status = "al_dia";
 }
 
@@ -111,8 +123,17 @@ export function updateDelinquency(db: DB, t: number) {
       if (r?.status === "aviso") r.status = "al_dia";
       continue;
     }
-    if (arrears >= DELINQUENCY.reportNoticeDays && (!r || r.status === "al_dia"))
+    if (arrears >= DELINQUENCY.reportNoticeDays && (!r || r.status === "al_dia")) {
       loan.creditReport = { noticeAt: oldest.dueAt + DELINQUENCY.reportNoticeDays * DAY_MS, status: "aviso" };
+      audit(db, {
+        category: "mora",
+        action: "aviso_previo_reporte",
+        actor: SYSTEM,
+        entity: { type: "credito", id: loan.id },
+        summary: `Aviso previo de reporte a centrales: ${DELINQUENCY.reportNoticeDays} días de mora (simulado)`,
+        data: { diasMora: arrears },
+      });
+    }
     const report = loan.creditReport;
     if (arrears >= DELINQUENCY.reportDays && report && report.status === "aviso") {
       const reportedAt = oldest.dueAt + DELINQUENCY.reportDays * DAY_MS;
@@ -125,7 +146,7 @@ export function updateDelinquency(db: DB, t: number) {
           documentType: "CC",
           documentNumber: loan.cedula,
           obligationId: loan.id,
-          obligationType: "Microcrédito productivo",
+          obligationType: creditTypeLabel(loan.purpose),
           disbursedAt: loan.disbursedAt ?? loan.createdAt,
           amount: loan.amount,
           overdueBalance: overdueBalance(loan, reportedAt),
@@ -136,6 +157,14 @@ export function updateDelinquency(db: DB, t: number) {
       loan.chargedOffAt = reportedAt;
       const a = db.applicants.find((x) => x.cedula === loan.cedula);
       if (a) a.blockedUntil = addDuration(reportedAt, `P${LEVEL_CHANGE.blockMonths}M`);
+      audit(db, {
+        category: "mora",
+        action: "reporte_central_simulado",
+        actor: SYSTEM,
+        entity: { type: "credito", id: loan.id },
+        summary: `Reporte negativo SIMULADO a centrales (no se envía), castigo del crédito y bloqueo de ${LEVEL_CHANGE.blockMonths} meses`,
+        data: { diasMora: DELINQUENCY.reportDays, saldoEnMora: report.snapshot!.overdueBalance },
+      });
     }
   }
 }

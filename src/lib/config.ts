@@ -79,14 +79,29 @@ export const VAULT_BREB = {
   holderName: "LA* BOD*** S.A.S.",
   bank: "Bóveda La Bodeguita (sandbox)",
 };
-/** Destino del crédito: es un crédito productivo (para el negocio o el trabajo), no de consumo */
+/**
+ * Destino del crédito: para el negocio o el trabajo (crédito productivo) o para la persona y su hogar (consumo).
+ * El tipo sale del destino y se muestra en el contrato y en el reporte a centrales.
+ * Ojo: el tope de usura de consumo es más bajo que el de microcrédito productivo; verificar las tasas antes del pitch.
+ */
 export const CREDIT_PURPOSES = [
-  { id: "capital_trabajo", title: "Capital de trabajo", sub: "Mercancía, insumos o materia prima" },
-  { id: "herramientas", title: "Herramientas o equipo", sub: "Para trabajar o producir más" },
-  { id: "local", title: "Mejorar el local o puesto", sub: "Adecuaciones, estantes, vitrina" },
-  { id: "otro_productivo", title: "Otro gasto del negocio", sub: "Transporte, permisos, publicidad" },
+  { id: "capital_trabajo", kind: "productivo", title: "Capital de trabajo", sub: "Mercancía, insumos o materia prima" },
+  { id: "herramientas", kind: "productivo", title: "Herramientas o equipo", sub: "Para trabajar o producir más" },
+  { id: "local", kind: "productivo", title: "Mejorar el local o puesto", sub: "Adecuaciones, estantes, vitrina" },
+  { id: "otro_productivo", kind: "productivo", title: "Otro gasto del negocio", sub: "Transporte, permisos, publicidad" },
+  { id: "hogar", kind: "consumo", title: "Gastos del hogar", sub: "Mercado, servicios o arriendo" },
+  { id: "salud", kind: "consumo", title: "Salud", sub: "Medicamentos, citas o exámenes" },
+  { id: "educacion", kind: "consumo", title: "Educación", sub: "Matrícula, útiles o uniformes" },
+  { id: "vivienda", kind: "consumo", title: "Arreglos de la vivienda", sub: "Reparaciones o mejoras de la casa" },
+  { id: "emergencia", kind: "consumo", title: "Una emergencia", sub: "Un imprevisto o una calamidad" },
+  { id: "deuda", kind: "consumo", title: "Pagar una deuda cara", sub: "Por ejemplo, salir del gota a gota" },
 ] as const;
 export type CreditPurpose = (typeof CREDIT_PURPOSES)[number]["id"];
+export type CreditKind = (typeof CREDIT_PURPOSES)[number]["kind"];
+
+/** Tipo de obligación según el destino (contrato, reporte a centrales) */
+export const creditTypeLabel = (purpose: string | null | undefined) =>
+  CREDIT_PURPOSES.find((p) => p.id === purpose)?.kind === "consumo" ? "Crédito de consumo" : "Microcrédito productivo";
 
 /** Abono mínimo por Bre-B, en pesos */
 export const MIN_PAYMENT = 1_000;

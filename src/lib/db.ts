@@ -8,6 +8,7 @@ import type { BrebKeyType } from "./breb-keys";
 import type { MLAssessment } from "./riesgo-ml";
 import type { IncomingRef, PaymentConfirmation, QuoteView } from "./openpayments";
 import type { DocKey, DocReading, StudyAnswers, StudyResult } from "./scoring";
+import { migrateAuditFormat, type AuditEvent } from "./audit";
 import { demoUsers } from "./demo-accounts";
 import { updateDelinquency } from "./credit-history";
 import { seedDemoInvestments } from "./demo-seed";
@@ -150,7 +151,7 @@ export interface CreditReport {
     documentType: "CC";
     documentNumber: string;
     obligationId: string;
-    obligationType: "Microcrédito productivo";
+    obligationType: string;
     disbursedAt: number;
     amount: number;
     /** Capital pendiente de las cuotas vencidas */
@@ -240,7 +241,7 @@ export interface Loan {
   status: "en_espera" | "activo" | "pagado" | "cancelado";
   createdAt: number;
   disbursedAt?: number;
-  /** Para qué usará el crédito (crédito productivo) */
+  /** Para qué usará el crédito (CREDIT_PURPOSES: productivo o de consumo) */
   purpose?: string;
   /** Aceptó el contrato y el pagaré (simulados) */
   termsAcceptedAt?: number;
@@ -373,6 +374,8 @@ export interface User {
   faceDescriptor?: string;
   /** Rastro del resultado de la verificación, sin imágenes (para auditoría y revisión). */
   faceCheck?: FaceCheck;
+  /** Cuenta suspendida por el operador: no puede iniciar sesión y pierde las sesiones abiertas */
+  suspended?: { at: number; reason: string; by: string };
   /** Hasta cuándo (reloj de la demo) vio sus notificaciones */
   notificationsSeenAt?: number;
   createdAt: number;
@@ -418,6 +421,10 @@ export interface PendingVaultGrant {
 }
 
 export interface DB {
+  /** Bitácora de auditoría encadenada por hash (src/lib/audit.ts) */
+  audit?: AuditEvent[];
+  /** Formato del hash de la bitácora (src/lib/audit.ts, AUDIT_FORMAT) */
+  auditFormat?: number;
   users: User[];
   sessions: Session[];
   clockOffsetMs: number;
@@ -496,6 +503,8 @@ async function load() {
   for (const demo of demoUsers()) if (!db.users.some((u) => u.id === demo.id)) db.users.push(demo);
   seedDemoInvestments(db, now(db));
   seedDemoBorrower(db, now(db));
+  // Bitácora sellada con un formato anterior del hash: se vuelve a sellar una vez
+  migrateAuditFormat(db);
   // Mora según el reloj de la demo: aviso del día 70, reporte simulado y castigo del día 90
   updateDelinquency(db, now(db));
   return { db, before, version: stored.version };

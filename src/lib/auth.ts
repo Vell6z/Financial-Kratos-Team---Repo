@@ -1,3 +1,4 @@
+import { actorOf, audit } from "./audit";
 import "server-only";
 import { randomBytes, timingSafeEqual } from "crypto";
 import { cookies } from "next/headers";
@@ -119,6 +120,7 @@ export function login(db: DB, emailInput: string, password: string) {
   if (!user || !checkPassword(user, password ?? "")) throw new BusinessError("Correo o contraseña incorrectos");
   if (user.faceVerification === "rechazada")
     throw new BusinessError("Tu cuenta fue bloqueada en la verificación de identidad. Si crees que es un error, escríbenos.");
+  if (user.suspended) throw new BusinessError("Tu cuenta está suspendida. Si crees que es un error, escríbenos.");
   return { user, token: startSession(db, user.id) };
 }
 
@@ -126,7 +128,12 @@ export async function logout() {
   const store = await cookies();
   const token = store.get(SESSION_COOKIE)?.value;
   store.delete(SESSION_COOKIE);
-  if (token) await withDB((db) => void (db.sessions = db.sessions.filter((s) => s.token !== token)));
+  if (token)
+    await withDB((db) => {
+      const user = userForToken(db, token);
+      db.sessions = db.sessions.filter((s) => s.token !== token);
+      if (user) audit(db, { category: "acceso", action: "sesion_cerrada", actor: actorOf(user), entity: { type: "usuario", id: user.id }, summary: "Cerró sesión" });
+    });
 }
 
 function userForToken(db: DB, token: string | undefined) {
@@ -134,8 +141,8 @@ function userForToken(db: DB, token: string | undefined) {
   const session = db.sessions.find((s) => s.token === token);
   if (!session || Date.now() - session.createdAt > SESSION_DAYS * 86_400_000) return null;
   const user = db.users.find((u) => u.id === session.userId) ?? null;
-  // Una cuenta rechazada en la verificación facial pierde también las sesiones abiertas
-  return user?.faceVerification === "rechazada" ? null : user;
+  // Una cuenta rechazada en la verificación facial o suspendida por el operador pierde también las sesiones abiertas
+  return user?.faceVerification === "rechazada" || user?.suspended ? null : user;
 }
 
 /**

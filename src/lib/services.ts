@@ -2,6 +2,7 @@ import "server-only";
 import { CREDIT_PURPOSES, DAY_MS, EARLY_WITHDRAWAL_SHARE, INVESTOR_ECONOMICS, INSTALLMENT_DAYS, investmentTermDays, Level, LEVELS, MIN_INSTALLMENTS, MIN_INVESTMENT, MIN_LOAN, MIN_PAYMENT, VAULT_BREB } from "./config";
 import { Applicant, DB, DisbursementState, Loan, Lot, Payout, Position, Tx, TxKind, newId, now } from "./db";
 import { accrue, buildSchedule, cop } from "./finance";
+import { audit, ownerActor, SYSTEM } from "./audit";
 import { applicantLevel, closeLoanHistory, currentArrears, daysLate as lateDays, installmentState, levelOutlook, payDeadline } from "./credit-history";
 import { assessWithML, mlHint } from "./riesgo-ml";
 import { CONFIG, computeStudy, creditLimit, DOCS, type DocKey, type DocReading, type RiskLevel, type StudyAnswers } from "./scoring";
@@ -136,6 +137,14 @@ export function creditDeposit(db: DB, wallet: string, level: Level, amountCop: n
   p.deposited += amountCop;
   db.pools[level].liquidity += amountCop;
   const txId = addTx(db, "deposito_ilp", level, amountCop, `Inversión desde ${wallet}`, mode, { wallet });
+  audit(db, {
+    category: "inversion",
+    action: "inversion_abonada",
+    actor: ownerActor(db, { wallet }),
+    entity: { type: "movimiento", id: txId },
+    summary: `Abonó ${cop(amountCop)} a la cajita ${LEVELS[level].name} (${mode})${opts.partial ? " · llegó una parte" : ""}`,
+    data: { monto: amountCop, nivel: level, modo: mode, parcial: Boolean(opts.partial), aporte: lot.id },
+  });
   db.txs[0].receipt = { investorWallet: wallet, requestedCop: amountCop, lotId: lot.id, maturesAt: lot.maturesAt };
   fundWaitingLoans(db, level);
   return txId;
@@ -195,6 +204,15 @@ export function debitWithdraw(db: DB, wallet: string, level: Level, amountCop: n
   p.withdrawn += amountCop;
   db.pools[level].liquidity -= amountCop;
   const txId = addTx(db, "retiro_ilp", level, amountCop, `Retiro hacia ${wallet}`, mode, { wallet });
+  const early = taken.filter((x) => x.early).reduce((sum, x) => sum + x.amount, 0);
+  audit(db, {
+    category: "inversion",
+    action: "retiro_debitado",
+    actor: ownerActor(db, { wallet }),
+    entity: { type: "movimiento", id: txId },
+    summary: `Retiro de ${cop(amountCop)} de la cajita ${LEVELS[level].name} (${mode})${early >= 1 ? ` · ${cop(early)} anticipado` : ""}`,
+    data: { monto: amountCop, nivel: level, modo: mode, anticipado: Math.round(early) },
+  });
   db.txs[0].lots = taken;
   db.txs[0].receipt = { investorWallet: wallet, requestedCop: amountCop };
   return txId;
@@ -224,6 +242,14 @@ export function refundWithdraw(db: DB, wallet: string, level: Level, amountCop: 
     p.withdrawn -= refund;
   }
   db.pools[level].liquidity += refund;
+  audit(db, {
+    category: "inversion",
+    action: share > 0 ? "retiro_ajustado" : "retiro_devuelto",
+    actor: SYSTEM,
+    entity: { type: "movimiento", id: txId },
+    summary: share > 0 ? `Llegó solo el ${Math.round(share * 100)} % del retiro: ${cop(refund)} vuelven a la cajita` : `El envío del retiro falló: ${cop(refund)} vuelven a la cajita`,
+    data: { devuelto: refund, nivel: level, llego: Math.round(share * 100) },
+  });
   if (share > 0 && tx) tx.amountCop = amountCop - refund;
   else db.txs = db.txs.filter((t) => t.id !== txId);
 }
@@ -403,7 +429,7 @@ export function requestLoan(
   if (a.maxInstallment && firstPayment > a.maxInstallment)
     throw new BusinessError(`La cuota (${cop(firstPayment)}) supera lo que puedes pagar cada ${INSTALLMENT_DAYS} días (${cop(a.maxInstallment)}). Elige más cuotas o un monto menor.`);
 
-  // Crédito productivo: destino y aceptación del contrato y el pagaré (simulados)
+  // Destino (productivo o de consumo) y aceptación del contrato y el pagaré (simulados)
   if (!CREDIT_PURPOSES.some((p) => p.id === contract.purpose)) throw new BusinessError("Cuéntanos para qué vas a usar el crédito.");
   if (!contract.termsAccepted) throw new BusinessError("Debes aceptar el contrato y el pagaré para solicitar el crédito.");
 
@@ -443,6 +469,14 @@ export function requestLoan(
   advance(db, loan, "BREB_KEY_VERIFIED");
   advance(db, loan, "USER_CONFIRMED_BENEFICIARY");
   db.loans.push(loan);
+  audit(db, {
+    category: "credito",
+    action: "credito_solicitado",
+    actor: ownerActor(db, { cedula }),
+    entity: { type: "credito", id: loan.id },
+    summary: `Solicitó ${cop(amount)} en ${installments} cuotas (${cfg.name}) para ${CREDIT_PURPOSES.find((p) => p.id === contract.purpose)?.title.toLowerCase()} · aceptó contrato y pagaré`,
+    data: { monto: amount, cuotas: installments, nivel: level, destino: contract.purpose, tipoLlave: v.keyType },
+  });
   fundWaitingLoans(db, level);
   return loan;
 }
@@ -462,6 +496,14 @@ function fundWaitingLoans(db: DB, level: Level) {
     pool.liquidity -= loan.amount;
     pool.lent += loan.amount;
     advance(db, loan, "TREASURY_DEBITED");
+    audit(db, {
+      category: "credito",
+      action: "capital_reservado",
+      actor: SYSTEM,
+      entity: { type: "credito", id: loan.id },
+      summary: `Reservó ${cop(loan.amount)} del pool ${LEVELS[level].name} para el desembolso`,
+      data: { monto: loan.amount, nivel: level, disponibleDespues: Math.round(pool.liquidity) },
+    });
   }
 }
 
@@ -497,6 +539,14 @@ export function completeDisbursement(db: DB, loanId: string, check: { directory:
   addTx(db, "desembolso_breb", loan.level, loan.amount, `Desembolso a ${loan.name} · llave ${loan.llaveBreb} · ${check.financialEntity.name} · ${loan.payout.id}`, "simulado", { cedula: loan.cedula });
   db.txs[0].loanId = loan.id;
   advance(db, loan, "DISBURSED");
+  audit(db, {
+    category: "credito",
+    action: "credito_desembolsado",
+    actor: SYSTEM,
+    entity: { type: "credito", id: loan.id },
+    summary: `Desembolsó ${cop(loan.amount)} a la llave ${loan.llaveBreb} (${check.financialEntity.name}) · payout simulado ${loan.payout.id}`,
+    data: { monto: loan.amount, directorio: check.directory, payout: loan.payout.id },
+  });
 }
 
 /** La llave ya no sirve: no se paga, el capital vuelve al pool y el crédito se cancela */
@@ -509,6 +559,14 @@ export function rejectDisbursement(db: DB, loanId: string, reason: string) {
   advance(db, loan, "BREB_KEY_REJECTED");
   loan.disbursement!.rejectedReason = reason;
   loan.status = "cancelado";
+  audit(db, {
+    category: "credito",
+    action: "desembolso_rechazado",
+    actor: SYSTEM,
+    entity: { type: "credito", id: loan.id },
+    summary: `No se desembolsó: ${reason} · el capital volvió al pool`,
+    data: { monto: loan.amount, nivel: loan.level },
+  });
   fundWaitingLoans(db, loan.level);
 }
 
@@ -553,6 +611,14 @@ export function receiveBrebPayment(db: DB, loanId: string, opts: { toKey: string
   const reference = `BREB-${txId.slice(0, 8).toUpperCase()}`;
   db.txs[0].loanId = loan.id;
   db.txs[0].breb = { reference, fromKey: opts.fromKey, toKey: VAULT_BREB.key, applied, owedAfter: loan.schedule.reduce((s, i) => s + installmentDue(i), 0) };
+  audit(db, {
+    category: "pago",
+    action: "pago_recibido",
+    actor: ownerActor(db, { cedula: loan.cedula }),
+    entity: { type: "credito", id: loan.id },
+    summary: `Pagó ${cop(amount)} por Bre-B (${reference}): ${what}`,
+    data: { monto: amount, referencia: reference, saldo: Math.round(db.txs[0].breb.owedAfter), movimiento: txId },
+  });
 
   if (loan.schedule.every((i) => i.paidAt)) {
     loan.status = "pagado";
