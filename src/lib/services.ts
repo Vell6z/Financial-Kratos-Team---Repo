@@ -91,20 +91,27 @@ export function withdrawable(db: DB, p: Position, maxCop: MaxCop = Infinity) {
   };
 }
 
-export function creditDeposit(db: DB, wallet: string, level: Level, amountCop: number, mode: "interledger" | "simulado") {
-  const amountError = validateMoney(amountCop, { min: MIN_INVESTMENT });
+/**
+ * Abona una inversión a la cajita como un aporte nuevo. Devuelve el id del movimiento.
+ * `partial`: llegó solo una parte de lo pedido (confirmado por la bóveda); se abona lo que llegó aunque sea menor al mínimo.
+ */
+export function creditDeposit(db: DB, wallet: string, level: Level, amountCop: number, mode: "interledger" | "simulado", opts: { partial?: boolean } = {}) {
+  const amountError = validateMoney(amountCop, { min: opts.partial ? 1 : MIN_INVESTMENT });
   if (amountError) throw new BusinessError(amountError);
   const p = findOrCreatePosition(db, wallet, level);
   accruePosition(db, p);
   // Cada aporte tiene su propio plazo: no se reinicia el de los anteriores
   const t = now(db);
   p.lots = ensureLots(p).filter((l) => l.value >= 0.5);
-  p.lots.push({ id: newId(), at: t, principal: amountCop, value: amountCop, maturesAt: t + investmentTermDays(level) * DAY_MS, earlyWithdrawn: 0 });
+  const lot: Lot = { id: newId(), at: t, principal: amountCop, value: amountCop, maturesAt: t + investmentTermDays(level) * DAY_MS, earlyWithdrawn: 0 };
+  p.lots.push(lot);
   p.balance += amountCop;
   p.deposited += amountCop;
   db.pools[level].liquidity += amountCop;
-  addTx(db, "deposito_ilp", level, amountCop, `Inversión desde ${wallet}`, mode, { wallet });
+  const txId = addTx(db, "deposito_ilp", level, amountCop, `Inversión desde ${wallet}`, mode, { wallet });
+  db.txs[0].receipt = { investorWallet: wallet, requestedCop: amountCop, lotId: lot.id, maturesAt: lot.maturesAt };
   fundWaitingLoans(db, level);
+  return txId;
 }
 
 /** Valida que el retiro sea posible (saldo, plazos de los aportes, máximo por retiro y liquidez del pool). */
@@ -162,27 +169,36 @@ export function debitWithdraw(db: DB, wallet: string, level: Level, amountCop: n
   db.pools[level].liquidity -= amountCop;
   const txId = addTx(db, "retiro_ilp", level, amountCop, `Retiro hacia ${wallet}`, mode, { wallet });
   db.txs[0].lots = taken;
+  db.txs[0].receipt = { investorWallet: wallet, requestedCop: amountCop };
   return txId;
 }
 
-/** Deshace un retiro reservado cuyo envío por Interledger falló: el saldo vuelve a los aportes de donde salió */
-export function refundWithdraw(db: DB, wallet: string, level: Level, amountCop: number, txId: string) {
+/**
+ * Deshace un retiro reservado cuyo envío por Interledger falló: el saldo vuelve a los aportes de donde salió.
+ * `share`: parte que SÍ llegó al inversionista (0 = no llegó nada y se borra el movimiento; 0,4 = se devuelve el 60 %).
+ */
+export function refundWithdraw(db: DB, wallet: string, level: Level, amountCop: number, txId: string, share = 0) {
   const p = db.positions.find((x) => x.wallet === wallet && x.level === level);
   const tx = db.txs.find((t) => t.id === txId);
+  const back = 1 - Math.min(1, Math.max(0, share));
+  const refund = share > 0 ? Math.round(amountCop * back) : amountCop;
   if (p) {
     const lots = ensureLots(p);
     for (const x of tx?.lots ?? []) {
+      const amount = share > 0 ? x.amount * back : x.amount;
       let l = lots.find((y) => y.id === x.id);
       // Caso raro: el aporte se depuró entre el retiro y la devolución; la plata vuelve como aporte disponible
-      if (!l) lots.push((l = { id: x.id, at: now(db), principal: x.amount, value: 0, maturesAt: 0, earlyWithdrawn: 0 }));
-      l.value += x.amount;
-      if (x.early) l.earlyWithdrawn = Math.max(0, l.earlyWithdrawn - x.amount);
+      if (!l) lots.push((l = { id: x.id, at: now(db), principal: amount, value: 0, maturesAt: 0, earlyWithdrawn: 0 }));
+      l.value += amount;
+      if (x.early) l.earlyWithdrawn = Math.max(0, l.earlyWithdrawn - amount);
+      x.amount -= amount;
     }
     p.balance = lots.reduce((s, l) => s + l.value, 0);
-    p.withdrawn -= amountCop;
+    p.withdrawn -= refund;
   }
-  db.pools[level].liquidity += amountCop;
-  db.txs = db.txs.filter((t) => t.id !== txId);
+  db.pools[level].liquidity += refund;
+  if (share > 0 && tx) tx.amountCop = amountCop - refund;
+  else db.txs = db.txs.filter((t) => t.id !== txId);
 }
 
 // ---------- Estudio de crédito ----------

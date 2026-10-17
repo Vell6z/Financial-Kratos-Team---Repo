@@ -31,7 +31,7 @@ Inversionista ──Interledger──▶ Bóveda (cajita por nivel) ──Bre-B�
 | 3 | Alto | 36% | $1.000.000 | 30–90 días |
 
 - **Inversión tipo "cajita"**: el inversionista elige un nivel y su saldo crece con interés compuesto a la tasa del nivel.
-- **Retiros**: cada aporte tiene su propio plazo según el nivel (120, 90 o 60 días, el plazo máximo de los créditos de ese nivel).
+- **Retiros**: cada aporte dura **un año** desde que se hace, en cualquier nivel.
   Puede sacar todo lo de los aportes que cumplieron su plazo y hasta el **50 %** de cada aporte que sigue en plazo (sumando lo
   que ya sacó de él). Los retiros salen primero de los aportes vencidos, del más antiguo al más nuevo.
   Máximo **US$30.000 por retiro**, pasado a pesos con la tasa de mercado del dólar. Siempre sujeto a la liquidez del pool.

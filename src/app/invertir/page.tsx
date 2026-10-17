@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { ConfirmDialog, useToast } from "@/components/feedback";
 import { Alert, Badge, Button, Card, EmptyState, Input, MoneyInput, PageHeader, Stat, api } from "@/components/ui";
-import { EARLY_WITHDRAWAL_SHARE, investmentTermDays, LEVEL_IDS, LEVELS, MIN_INVESTMENT, type Level } from "@/lib/config";
+import { EARLY_WITHDRAWAL_SHARE, investmentTermLabel, LEVEL_IDS, LEVELS, MIN_INVESTMENT, type Level } from "@/lib/config";
 import { accrue, cop, pct } from "@/lib/finance";
 import { validateMoney, validateWallet, walletLabel } from "@/lib/validators";
 
@@ -50,13 +50,24 @@ interface Fx {
   updatedAt: string | null;
 }
 const FX_SOURCE: Record<FxSource, string> = { mercado: "tasa de mercado", manual: "tasa fija del equipo", respaldo: "tasa de respaldo (sin conexión)" };
-type DepositResult = { status: "completed" | "pending"; redirectUrl?: string; debit?: string; receive?: string; quote?: Quote };
+type DepositResult = {
+  status: "completed" | "pending";
+  redirectUrl?: string;
+  debit?: string;
+  receive?: string;
+  quote?: Quote;
+  /** Movimiento creado: para el comprobante en PDF */
+  txId?: string;
+  /** Retiro: llegó solo una parte a la wallet */
+  partial?: { share: number; amountCop: number } | null;
+};
 /** Pago cotizado por Interledger que falta aprobar en la wallet */
 type Pending = DepositResult & { kind: "deposit" | "withdraw"; amountCop: number; level: Level };
 
 const RETURN_MESSAGES: Record<string, { tone: "success" | "error" | "warning"; title: string; text: string }> = {
-  invertido: { tone: "success", title: "Inversión recibida", text: "Llegó por Interledger y tu cajita ya está rentando." },
-  retirado: { tone: "success", title: "Retiro enviado", text: "El dinero va en camino a tu wallet por Interledger." },
+  invertido: { tone: "success", title: "Inversión recibida", text: "La bóveda confirmó que llegó por Interledger y tu cajita ya está rentando." },
+  retirado: { tone: "success", title: "Retiro enviado", text: "Tu wallet confirmó que llegó el dinero por Interledger." },
+  parcial: { tone: "warning", title: "Llegó una parte del pago", text: "Ajustamos tu cajita con lo que confirmó la wallet que recibe." },
   rechazado: { tone: "warning", title: "Pago cancelado", text: "No se aprobó el pago en la wallet. No se movió dinero." },
   error: { tone: "error", title: "No se pudo completar el pago", text: "Intenta de nuevo en unos minutos." },
 };
@@ -76,6 +87,8 @@ export default function InvestPage() {
   const [pending, setPending] = useState<Pending | null>(null);
   const [interledger, setInterledger] = useState(true);
   const [toWithdraw, setToWithdraw] = useState<{ p: Position; value: number } | null>(null);
+  // Último movimiento hecho en esta pantalla: se ofrece su comprobante
+  const [receipt, setReceipt] = useState<{ txId: string; kind: "deposit" | "withdraw" | null } | null>(null);
   const [submitted, setSubmitted] = useState(false);
   const [fx, setFx] = useState<Fx | null>(null);
   // Máximo por retiro: US$30.000 en pesos a la tasa del día (lo calcula el servidor)
@@ -103,6 +116,9 @@ export default function InvestPage() {
       // Muestra el resultado del pago al volver de la wallet
       const m = RETURN_MESSAGES[pago];
       toast(m.tone, m.title, q.get("msg") ?? m.text);
+      const tx = q.get("tx");
+      // Fuera del efecto (como el refresco de abajo): ofrece el comprobante del pago que acaba de volver
+      if (tx && /^[\w-]+$/.test(tx)) setTimeout(() => setReceipt({ txId: tx, kind: pago === "retirado" ? "withdraw" : pago === "invertido" ? "deposit" : null }), 0);
       window.history.replaceState(null, "", "/invertir");
     }
   }, [toast]);
@@ -125,7 +141,10 @@ export default function InvestPage() {
     try {
       const res = await api<DepositResult>("/api/invest/deposit", { wallet, level, amountCop: Number(amount) });
       if (res.status === "pending") setPending({ ...res, kind: "deposit", amountCop: Number(amount), level });
-      else toast("success", "Inversión registrada", `${cop(Number(amount))} en ${LEVELS[level].name}. Tu cajita ya está rentando.`);
+      else {
+        toast("success", "Inversión registrada", `${cop(Number(amount))} en ${LEVELS[level].name}. Tu cajita ya está rentando.`);
+        if (res.txId) setReceipt({ txId: res.txId, kind: "deposit" });
+      }
       setSubmitted(false);
       await load();
     } catch (e) {
@@ -140,12 +159,21 @@ export default function InvestPage() {
     try {
       const res = await api<DepositResult>("/api/invest/withdraw", { level: p.level, amountCop: Math.floor(value) });
       if (res.status === "pending") setPending({ ...res, kind: "withdraw", amountCop: Math.floor(value), level: p.level });
-      else
-        toast(
-          "success",
-          "Retiro enviado",
-          res.receive ? `${cop(value)} salieron de la bóveda: llegan ${res.receive.replace(".", ",")} a tu wallet.` : `${cop(value)} enviados a tu wallet.`,
-        );
+      else {
+        if (res.partial)
+          toast(
+            "warning",
+            "Llegó una parte del retiro",
+            `Tu wallet confirmó ${Math.round(res.partial.share * 100)} %: descontamos ${cop(res.partial.amountCop)} y el resto volvió a tu cajita.`,
+          );
+        else
+          toast(
+            "success",
+            "Retiro enviado",
+            res.receive ? `${cop(value)} salieron de la bóveda y tu wallet confirmó ${res.receive.replace(".", ",")}.` : `${cop(value)} enviados a tu wallet.`,
+          );
+        if (res.txId) setReceipt({ txId: res.txId, kind: "withdraw" });
+      }
       await load();
     } catch (e) {
       toast("error", "No se pudo retirar", (e as Error).message);
@@ -169,7 +197,7 @@ export default function InvestPage() {
       <PageHeader
         eyebrow="Inversionista"
         title="Mis inversiones"
-        description={`Elige un nivel de riesgo: tu dinero renta a la tasa de ese nivel con interés compuesto. Al cumplir el plazo del nivel retiras todo; antes, hasta el ${EARLY_PCT}.`}
+        description={`Elige un nivel de riesgo: tu dinero renta a la tasa de ese nivel con interés compuesto. Cada aporte dura un año: al cumplirlo retiras todo; antes, como máximo el ${EARLY_PCT}.`}
       />
 
       <Card className="grid grid-cols-2 gap-6 sm:grid-cols-3">
@@ -179,6 +207,26 @@ export default function InvestPage() {
         <Stat label="Rendimiento acumulado" value={<span className="text-mint">{cop(gains)}</span>} />
         <Stat label="Cajitas activas" value={positions.filter((p) => p.balance >= 1).length} />
       </Card>
+
+      {receipt && (
+        <Alert
+          tone="success"
+          title={receipt.kind === "deposit" ? "Comprobante de tu inversión" : receipt.kind === "withdraw" ? "Comprobante de tu retiro" : "Comprobante del pago"}
+          onClose={() => setReceipt(null)}
+          action={
+            <span className="flex gap-4">
+              <a href={`/api/receipts/${receipt.txId}`} target="_blank" rel="noopener" className="font-medium text-brand hover:underline">
+                Ver PDF
+              </a>
+              <a href={`/api/receipts/${receipt.txId}?descargar`} className="font-medium text-brand hover:underline">
+                Descargar
+              </a>
+            </span>
+          }
+        >
+          Con el monto, la cotización usada y lo que confirmó Interledger.
+        </Alert>
+      )}
 
       {!interledger && (
         <Alert tone="info" title="Modo demostración">
@@ -225,7 +273,7 @@ export default function InvestPage() {
                         <span className="text-xs text-muted">{LEVELS[l].risk}</span>
                       </div>
                       <div className="mt-1 text-2xl font-semibold text-mint">{pct(LEVELS[l].rateEA)} EA</div>
-                      <div className="text-xs font-medium">Plazo {investmentTermDays(l)} días</div>
+                      <div className="text-xs font-medium">Plazo {investmentTermLabel(l)}</div>
                       <p className="mt-1 text-xs text-muted">{RISK_TEXT[l]}</p>
                     </button>
                   ))}
@@ -292,7 +340,7 @@ export default function InvestPage() {
                 <dl className="space-y-2 text-sm">
                   <SummaryRow k="Desde" v={wallet && !walletError ? walletLabel(asUrl(wallet)) : "—"} />
                   <SummaryRow k="Cajita" v={`${LEVELS[level].name} · ${pct(LEVELS[level].rateEA)} EA`} />
-                  <SummaryRow k="Plazo" v={`${investmentTermDays(level)} días`} />
+                  <SummaryRow k="Plazo" v={investmentTermLabel(level)} />
                   <SummaryRow k="Monto" v={Number(amount) > 0 ? cop(Number(amount)) : "—"} />
                   {fx && fx.assetCode !== "COP" && Number(amount) > 0 && (
                     <SummaryRow k={`En ${fx.assetCode}`} v={`≈ ${fmtAsset(Number(amount) / fx.copPerUnit, fx.assetCode)}`} />
@@ -312,7 +360,7 @@ export default function InvestPage() {
                   </div>
                 )}
                 <p className="text-[11px] text-muted">
-                  Cada aporte tiene su propio plazo de {investmentTermDays(level)} días: antes de cumplirlo puedes retirar hasta el {EARLY_PCT} de ese aporte.
+                  Cada aporte dura {investmentTermLabel(level)} desde que lo haces: antes de cumplirlo puedes retirar como máximo el {EARLY_PCT} de ese aporte.
                 </p>
                 <Button onClick={invest} loading={busy} className="w-full py-2.5">
                   {busy ? "Cotizando con Interledger…" : `Invertir ${Number(amount) > 0 ? cop(Number(amount)) : ""}`}

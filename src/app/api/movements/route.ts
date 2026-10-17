@@ -12,7 +12,17 @@ export async function GET() {
       const mine = db.txs.filter((t) => (user.role === "inversor" ? t.wallet && t.wallet === user.wallet : t.cedula && t.cedula === user.cedula));
       return {
         role: user.role,
-        items: mine.map(({ id, at, kind, level, amountCop, mode }) => ({ id, at, kind, level, amountCop, mode })),
+        items: mine.map(({ id, at, kind, level, amountCop, mode, receipt }) => ({
+          id,
+          at,
+          kind,
+          level,
+          amountCop,
+          mode,
+          // Inversiones y retiros tienen comprobante en PDF (/api/receipts/[id])
+          hasReceipt: kind === "deposito_ilp" || kind === "retiro_ilp",
+          partial: Boolean(receipt && receipt.requestedCop !== amountCop),
+        })),
       };
     }),
   );

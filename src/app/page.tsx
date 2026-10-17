@@ -129,7 +129,7 @@ export default async function Home() {
           points={[
             "Elige tu perfil de riesgo: más riesgo, más rendimiento.",
             "Tu saldo crece con interés compuesto, como una cajita.",
-            "Al cumplir el plazo de tu nivel retiras todo; antes, hasta el 50 %. Directo a tu wallet de Interledger.",
+            "Tu inversión dura un año: al cumplirlo retiras todo; antes, como máximo el 50 %. Directo a tu wallet de Interledger.",
             "Cada peso financia a una persona real en Colombia.",
           ]}
           cta={{ href: investHref, label: "Empezar a invertir" }}

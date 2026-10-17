@@ -42,6 +42,7 @@ python3 ml/train_baseline.py   # entrena el modelo base y escribe ml/modelo/regr
 **Integraciones**
 - `openpayments.ts` — Open Payments: inversión (inversionista → bóveda) y retiro (bóveda → inversionista):
   - grants interactivos con verificación del `hash` GNAP;
+  - confirmación en la wallet que recibe (`confirmIncoming`): se abona o descuenta lo que llegó al *incoming payment*, que luego se cierra;
   - permiso de retiros automáticos de la bóveda (`startVaultGrant` / `sendFromVault`), con rotación de token.
 - `fx.ts` — tasa de mercado COP ↔ moneda de la bóveda (open.er-api.com, caché 1 h) y máximo por retiro en USD → COP.
 - `breb.ts` — resolver llaves Bre-B en el directorio de Wompi (**solo GET**). `breb-keys.ts`: tipos y formato de llaves (compartido).
@@ -52,6 +53,8 @@ python3 ml/train_baseline.py   # entrena el modelo base y escribe ml/modelo/regr
 **Soporte**
 - `auth.ts` (sesión por cookie `kratos_session`, `requireUser` / `requireRole` / `requireAdmin` / `requirePageRole`), `password.ts` (scrypt).
 - `validators.ts` (validaciones compartidas navegador/servidor), `registration.ts`, `notifications.ts`, `dashboard.ts`, `nav.ts`, `api.ts` (`handle()` convierte errores en JSON).
+- `pdf.ts` (generador de PDF sin dependencias) y `receipts.ts` — comprobantes de inversiones y retiros en `/api/receipts/[id]`.
+- `demo-seed.ts` — inversiones precargadas de la cuenta demo de inversionista (una sola vez, `db.demoSeeded`).
 - `demo-accounts.ts` — cuentas demo (inversionista, acreditado, operador). **Sus credenciales viven solo ahí: no repetirlas en chats, docs ni commits nuevos.**
 
 **Pantallas (`src/app/`)** — cada ruta protegida tiene un `layout.tsx` con guardas de rol.
@@ -69,11 +72,11 @@ python3 ml/train_baseline.py   # entrena el modelo base y escribe ml/modelo/regr
 
 ## Reglas de negocio clave
 
-| Nivel | Tasa EA | Techo | Plazo del crédito | Plazo de cada aporte del inversionista |
-|---|---|---|---|---|
-| 1 (riesgo bajo) | 24 % | $5.000.000 | 30–365 días | 120 días |
-| 2 (riesgo medio) | 30 % | $3.000.000 | 30–150 días | 90 días |
-| 3 (riesgo alto) | 36 % | $1.000.000 | 30–90 días | 60 días |
+| Nivel | Tasa EA | Techo | Plazo del crédito |
+|---|---|---|---|
+| 1 (riesgo bajo) | 24 % | $5.000.000 | 30–365 días |
+| 2 (riesgo medio) | 30 % | $3.000.000 | 30–150 días |
+| 3 (riesgo alto) | 36 % | $1.000.000 | 30–90 días |
 
 **Crédito**
 - Mínimo **2 cuotas**, una **cada 15 días** contados desde el desembolso (no por quincenas del calendario), sistema francés. `MIN_INSTALLMENTS` en `config.ts`.
@@ -82,8 +85,9 @@ python3 ml/train_baseline.py   # entrena el modelo base y escribe ml/modelo/regr
 
 **Inversión y retiros**
 - Capital semilla de $50 M (supuesto).
-- Cada inversión es un **aporte con su propio plazo**: antes del plazo se puede sacar hasta el 50 % de ese aporte. Los retiros salen primero de los aportes vencidos.
+- Cada inversión es un **aporte que dura un año** (en cualquier nivel, `INVESTMENT_TERM_DAYS`): antes del año se puede sacar como máximo el 50 % de ese aporte. Los retiros salen primero de los aportes vencidos.
 - Máximo **US$30.000 por retiro**, pasado a COP con la tasa del día.
+- El pago vale por lo que confirma **la wallet que recibe**. Si llega solo una parte, se abona esa parte (o, en un retiro, el resto vuelve a la cajita).
 
 **Estudio y modelo de riesgo**
 - Factores de confianza: declarado ×0,5, documento ×0,8, confirmado ×1.
@@ -105,6 +109,8 @@ python3 ml/train_baseline.py   # entrena el modelo base y escribe ml/modelo/regr
 | Verificación de llaves Bre-B | **Real** contra el directorio de producción de Wompi, solo lectura (`WOMPI_RESOLVE_ENV=production`) |
 | Lector de QR Bre-B | **Real**, probado con QR de Bancolombia y Nequi |
 | Lectura de documentos | **Gemini** (`gemini-3.8-flash`, una sola llamada por estudio, `thinkingLevel: low`, ~10 s) si hay `GEMINI_API_KEY`; si no, trucos en el nombre (`factura_mora`, `extracto_1000000`, "alterad"). El plan gratuito permite ~5 llamadas por minuto |
+| Comprobantes de inversión y retiro | PDF generado en el servidor, con la cotización y la confirmación del cobro |
+| Inversiones de la cuenta demo | Precargadas (marcadas como demostración, sin Interledger) |
 | Desembolso (payout) | Simulado: payout armado, no enviado |
 | Pago de cuotas | Simulador de banco en `/mi-credito` |
 | Referencias, verificación facial | Simuladas |
@@ -171,9 +177,7 @@ Wallets de prueba (en `.env`, no en el código):
 
 **Se pueden hacer ya**
 - Prueba de punta a punta de una inversión y un retiro reales: aprobar en la wallet `usdtroly` y autorizar la bóveda en `/boveda`.
-- Cierre del pago de Open Payments: confirmar lo recibido en el *incoming payment* y cerrarlo en los retiros.
 - Robustez de `db.json` (no arrancar vacía si el archivo no se puede leer).
-- Datos de demo precargados.
-- Comprobantes y plan de pagos en PDF.
+- Plan de pagos y comprobantes del acreditado en PDF (desembolso, abonos, paz y salvo).
 - Referencias y verificación facial reales.
 - https en desarrollo para la cámara del celular.

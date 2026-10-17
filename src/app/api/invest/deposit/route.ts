@@ -32,9 +32,9 @@ export async function POST(request: Request) {
     });
 
     if (!isInterledgerEnabled()) {
-      await withDB((db) => creditDeposit(db, wallet, level, amountCop, "simulado"));
+      const txId = await withDB((db) => creditDeposit(db, wallet, level, amountCop, "simulado"));
       void processPayouts();
-      return { status: "completed", mode: "simulado" };
+      return { status: "completed", mode: "simulado", txId };
     }
 
     const id = newId();

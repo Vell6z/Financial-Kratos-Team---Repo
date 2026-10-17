@@ -6,8 +6,10 @@ import type { Installment } from "./finance";
 import type { AccountRole } from "./registration";
 import type { BrebKeyType } from "./breb-keys";
 import type { MLAssessment } from "./riesgo-ml";
+import type { IncomingRef, PaymentConfirmation, QuoteView } from "./openpayments";
 import type { DocKey, DocReading, StudyAnswers, StudyResult } from "./scoring";
 import { demoUsers } from "./demo-accounts";
+import { seedDemoInvestments } from "./demo-seed";
 
 // Persistencia mínima en un archivo JSON (suficiente para la demo; sin base de datos).
 
@@ -26,6 +28,23 @@ export interface Tx {
   cedula?: string;
   /** Retiro: de qué aportes salió (para devolverlo exacto si el envío falla) */
   lots?: { id: string; amount: number; early: boolean }[];
+  /** Inversión o retiro: datos para el comprobante (cotización y lo confirmado por quien recibe) */
+  receipt?: TxReceipt;
+}
+
+export interface TxReceipt {
+  /** Wallet del inversionista y de la bóveda */
+  investorWallet: string;
+  vaultWallet?: string;
+  /** Monto pedido en pesos (puede diferir de amountCop si llegó solo una parte) */
+  requestedCop: number;
+  quote?: QuoteView;
+  confirmation?: PaymentConfirmation | null;
+  /** Aporte creado (inversión) y su vencimiento */
+  lotId?: string;
+  maturesAt?: number;
+  /** Aporte precargado para la demo: no pasó por Interledger */
+  demo?: boolean;
 }
 
 /** "Cajita" del inversionista en un nivel de riesgo */
@@ -51,7 +70,7 @@ export interface Lot {
   principal: number;
   /** Valor actual (capital + rendimiento − retiros) */
   value: number;
-  /** Fin del plazo del nivel para este aporte. Antes, solo se puede sacar el 50 % */
+  /** Fin del plazo de este aporte (un año). Antes, solo se puede sacar el 50 % */
   maturesAt: number;
   /** Lo retirado de este aporte antes de su plazo (cuenta para su tope del 50 %) */
   earlyWithdrawn: number;
@@ -183,6 +202,8 @@ export interface PendingPayment {
   clientNonce?: string;
   interactNonce?: string;
   authServer?: string;
+  quote?: QuoteView;
+  incoming?: IncomingRef;
   createdAt: number;
 }
 
@@ -308,6 +329,8 @@ export interface DB {
   brebVerifications: BrebVerification[];
   vaultGrant?: VaultGrant | null;
   pendingVaultGrant?: PendingVaultGrant | null;
+  /** Versión de las inversiones precargadas de la cuenta demo (src/lib/demo-seed.ts). `true` = versión 1 */
+  demoSeeded?: number | boolean;
 }
 
 const DB_PATH = path.join(process.cwd(), "data", "db.json");
@@ -328,15 +351,18 @@ export function emptyDB(): DB {
 }
 
 async function load(): Promise<DB> {
+  let db: DB;
   try {
-    const db = { ...emptyDB(), ...JSON.parse(await fs.readFile(DB_PATH, "utf8")) } as DB;
-    // Garantiza que existan las cuentas demo (también las que se agreguen después)
-    for (const demo of demoUsers()) if (!db.users.some((u) => u.id === demo.id)) db.users.push(demo);
-    return db;
+    db = { ...emptyDB(), ...JSON.parse(await fs.readFile(DB_PATH, "utf8")) } as DB;
   } catch {
-    // Base nueva: arranca con las cuentas demo
-    return { ...emptyDB(), users: demoUsers() };
+    // Base nueva: las cuentas demo se agregan abajo
+    db = emptyDB();
   }
+  // Garantiza que existan las cuentas demo (también las que se agreguen después) y sus inversiones precargadas.
+  // Va fuera del try: un error aquí no debe confundirse con una base nueva
+  for (const demo of demoUsers()) if (!db.users.some((u) => u.id === demo.id)) db.users.push(demo);
+  seedDemoInvestments(db, now(db));
+  return db;
 }
 
 async function save(db: DB) {

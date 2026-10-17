@@ -101,6 +101,34 @@ export interface StartedPayment {
   receive: string;
   /** Cotización de Interledger en números, para mostrar la tasa de cambio y los costos */
   quote: QuoteView;
+  /** Cobro (incoming payment) en la wallet que recibe: para confirmar lo que llegó y cerrarlo */
+  incoming: IncomingRef;
+}
+
+type Amount = { value: string; assetCode: string; assetScale: number };
+
+/** Lo necesario para consultar y cerrar el incoming payment después del pago */
+export interface IncomingRef {
+  url: string;
+  accessToken: string;
+  manageUrl: string;
+  /** Lo que debe llegar: el monto que recibe según la cotización */
+  expected: Amount;
+}
+
+/** Lo que confirmó la wallet que recibe (no lo que dice la que paga) */
+export interface PaymentConfirmation {
+  incomingPaymentId: string;
+  outgoingPaymentId: string;
+  expected: { value: number; assetCode: string };
+  received: { value: number; assetCode: string };
+  /** Llegó el monto completo */
+  full: boolean;
+  /** El cobro quedó cerrado: ya no acepta más pagos */
+  closed: boolean;
+  /** La wallet que paga seguía enviando cuando se consultó: el cobro queda abierto hasta que venza */
+  inProgress: boolean;
+  confirmedAt: number;
 }
 
 export interface QuoteView {
@@ -191,6 +219,12 @@ export async function startPayment(opts: {
 
   return {
     redirectUrl: opGrant.interact.redirect,
+    incoming: {
+      url: incoming.id,
+      accessToken: ipGrant.access_token.value,
+      manageUrl: ipGrant.access_token.manage,
+      expected: quote.receiveAmount,
+    },
     senderWallet: sender.id,
     senderResourceServer: sender.resourceServer,
     quoteId: quote.id,
@@ -240,7 +274,85 @@ export function verifyInteractHash(p: { clientNonce?: string; interactNonce?: st
   return false;
 }
 
-/** Completa el pago después de que el usuario aprobó en su wallet y espera a que Interledger lo liquide. */
+/**
+ * Consulta el incoming payment en la wallet que recibe hasta que llegue lo esperado, y lo cierra
+ * (complete) para que no acepte más pagos. Así el pago se da por bueno con lo que confirma quien recibe.
+ */
+export async function confirmIncoming(ref: IncomingRef, outgoing: { id: string; done: boolean }): Promise<PaymentConfirmation> {
+  const client = await getClient();
+  const auth = { url: ref.url, accessToken: ref.accessToken };
+  const withToken = async <T>(fn: () => Promise<T>) => {
+    try {
+      return await fn();
+    } catch (err) {
+      // Token vencido: se rota una vez
+      if (!(err instanceof OpenPaymentsClientError) || err.status !== 401) throw err;
+      const t = await client.token.rotate({ url: ref.manageUrl, accessToken: auth.accessToken });
+      auth.accessToken = t.access_token.value;
+      ref.manageUrl = t.access_token.manage;
+      return fn();
+    }
+  };
+  const expected = BigInt(ref.expected.value);
+  let incoming = await withToken(() => client.incomingPayment.get(auth));
+  // Lo que llega puede tardar un poco más que el aviso de la wallet que paga
+  for (let i = 0; i < 10 && !incoming.completed && BigInt(incoming.receivedAmount.value) < expected; i++) {
+    await new Promise((r) => setTimeout(r, 1000));
+    incoming = await withToken(() => client.incomingPayment.get(auth));
+  }
+  const full = BigInt(incoming.receivedAmount.value) >= expected;
+  let closed = incoming.completed;
+  // Solo se cierra si llegó todo o si la wallet que paga ya terminó: cerrarlo antes cortaría un pago en curso
+  if (!closed && (full || outgoing.done)) {
+    try {
+      closed = (await withToken(() => client.incomingPayment.complete(auth))).completed;
+    } catch (err) {
+      // No cerrarlo no cambia lo recibido: vence solo
+      console.error("No se pudo cerrar el incoming payment", err instanceof OpenPaymentsClientError ? err.status : err);
+    }
+  }
+  return {
+    incomingPaymentId: incoming.id,
+    outgoingPaymentId: outgoing.id,
+    expected: decimal(ref.expected),
+    received: decimal(incoming.receivedAmount),
+    full,
+    closed,
+    inProgress: !full && !outgoing.done,
+    confirmedAt: Date.now(),
+  };
+}
+
+/** Confirmación con lo que reporta la wallet que paga (cuando no se pudo consultar la que recibe) */
+function senderConfirmation(
+  payment: { id: string; failed?: boolean; sentAmount: Amount; debitAmount: Amount },
+  incomingPaymentId: string,
+  expected: { value: number; assetCode: string },
+): PaymentConfirmation {
+  const share = Number(payment.sentAmount.value) / Number(payment.debitAmount.value);
+  return {
+    incomingPaymentId,
+    outgoingPaymentId: payment.id,
+    expected,
+    received: { ...expected, value: expected.value * share },
+    full: share >= 1,
+    closed: false,
+    inProgress: !payment.failed && share < 1,
+    confirmedAt: Date.now(),
+  };
+}
+
+/**
+ * Parte de lo esperado que se da por recibida (0 a 1). Si el pago seguía en curso, cuenta completo:
+ * lo cotizado ya quedó comprometido en la wallet que paga.
+ */
+export const receivedShare = (c: PaymentConfirmation) =>
+  c.full || c.inProgress ? 1 : c.expected.value > 0 ? Math.min(1, c.received.value / c.expected.value) : 0;
+
+/**
+ * Completa el pago después de que el usuario aprobó en su wallet, espera a que Interledger lo liquide
+ * y confirma en la wallet que recibe cuánto llegó.
+ */
 export async function finishPayment(p: {
   continueUri: string;
   continueToken: string;
@@ -248,6 +360,7 @@ export async function finishPayment(p: {
   senderWallet: string;
   senderResourceServer: string;
   quoteId: string;
+  incoming?: IncomingRef;
 }) {
   const client = await getClient();
   const grant = await client.grant.continue({ url: p.continueUri, accessToken: p.continueToken }, { interact_ref: p.interactRef });
@@ -259,8 +372,22 @@ export async function finishPayment(p: {
     await new Promise((r) => setTimeout(r, 1000));
     payment = await client.outgoingPayment.get({ url: payment.id, accessToken: auth.accessToken });
   }
-  if (payment.failed) throw new Error("Interledger no pudo completar el pago. No se movió tu dinero.");
-  return payment;
+  if (payment.failed && payment.sentAmount.value === "0") throw new PaymentError("Interledger no pudo completar el pago. No se movió tu dinero.");
+  // Pagos guardados antes de este cambio no tienen el cobro: no se pueden confirmar
+  const done = payment.failed || payment.sentAmount.value === payment.debitAmount.value;
+  let confirmation: PaymentConfirmation | null = null;
+  if (p.incoming) {
+    try {
+      confirmation = await confirmIncoming(p.incoming, { id: payment.id, done });
+    } catch (err) {
+      // El dinero ya salió: si no se puede consultar quien recibe, se toma lo que reporta quien paga
+      console.error("No se pudo confirmar el pago en la wallet que recibe", err instanceof OpenPaymentsClientError ? err.status : err);
+      confirmation = senderConfirmation(payment, p.incoming.url, decimal(p.incoming.expected));
+    }
+  }
+  if (confirmation && confirmation.received.value === 0 && !confirmation.inProgress)
+    throw new PaymentError(`El pago no aparece en la wallet que recibe. Si se descontó de la tuya, escríbenos con este código: ${payment.id.split("/").pop()}`);
+  return { payment, confirmation };
 }
 
 // ======================================================================
@@ -367,6 +494,7 @@ export async function sendFromVault(grant: VaultGrant, investorWallet: string, a
     { url: investor.resourceServer, accessToken: ipGrant.access_token.value },
     { walletAddress: investor.id, expiresAt: new Date(Date.now() + 10 * 60 * 1000).toISOString() },
   );
+  const incomingRef: IncomingRef = { url: incoming.id, accessToken: ipGrant.access_token.value, manageUrl: ipGrant.access_token.manage, expected: debitAmount };
 
   // 2. Cotización en la bóveda por el monto exacto que sale de ella
   const quoteGrant = await client.grant.request({ url: vault.authServer }, { access_token: { access: [{ type: "quote", actions: ["create", "read"] }] } });
@@ -375,6 +503,7 @@ export async function sendFromVault(grant: VaultGrant, investorWallet: string, a
     { url: vault.resourceServer, accessToken: quoteGrant.access_token.value },
     { walletAddress: vault.id, receiver: incoming.id, method: "ilp", debitAmount },
   );
+  incomingRef.expected = quote.receiveAmount;
 
   // 3. Pago saliente con el permiso guardado (rota el token si venció)
   const updated: VaultGrant = { ...grant };
@@ -410,11 +539,21 @@ export async function sendFromVault(grant: VaultGrant, investorWallet: string, a
   } catch (err) {
     console.error("No se pudo consultar el estado del retiro", err);
   }
-  if (payment.failed) throw new PaymentError("Interledger no pudo completar el envío desde la bóveda. No se movió tu dinero.");
+  if (payment.failed && payment.sentAmount.value === "0")
+    throw new PaymentError("Interledger no pudo completar el envío desde la bóveda. No se movió tu dinero.");
+  // Lo que llegó lo confirma la wallet del inversionista; si la consulta falla, se toma lo que dice la bóveda
+  let confirmation: PaymentConfirmation;
+  try {
+    confirmation = await confirmIncoming(incomingRef, { id: payment.id, done: payment.failed || payment.sentAmount.value === payment.debitAmount.value });
+  } catch (err) {
+    console.error("No se pudo confirmar el retiro en la wallet del inversionista", err instanceof OpenPaymentsClientError ? err.status : err);
+    confirmation = senderConfirmation(payment, incoming.id, decimal(quote.receiveAmount));
+  }
   updated.spent = String(BigInt(updated.spent) + BigInt(quote.debitAmount.value));
 
   return {
     grant: updated,
+    confirmation,
     sent: formatAmount(quote.debitAmount),
     received: formatAmount(quote.receiveAmount),
     quote: {

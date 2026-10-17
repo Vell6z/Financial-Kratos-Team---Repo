@@ -13,6 +13,9 @@ interface Item {
   level: Level;
   amountCop: number;
   mode: string;
+  hasReceipt: boolean;
+  /** Llegó solo una parte de lo pedido */
+  partial: boolean;
 }
 
 /** Cómo ve cada movimiento el propio usuario: entra (+) o sale (−) de su bolsillo */
@@ -114,11 +117,19 @@ export default function MovementsPage() {
                       <div className="text-xs text-muted">{fmtDate(i.at)}</div>
                       <div className="text-[11px] text-muted">
                         {LEVELS[i.level].name} · vía {v.via}
+                        {i.partial && " · llegó una parte"}
                       </div>
                     </div>
-                    <span className={`shrink-0 text-sm font-semibold tabular-nums ${incoming ? "text-mint" : ""}`}>
-                      {v.sign} {cop(i.amountCop)}
-                    </span>
+                    <div className="shrink-0 text-right">
+                      <div className={`text-sm font-semibold tabular-nums ${incoming ? "text-mint" : ""}`}>
+                        {v.sign} {cop(i.amountCop)}
+                      </div>
+                      {i.hasReceipt && (
+                        <a href={`/api/receipts/${i.id}`} target="_blank" rel="noopener" className="text-xs font-medium text-brand hover:underline">
+                          Comprobante PDF
+                        </a>
+                      )}
+                    </div>
                   </li>
                 );
               })}

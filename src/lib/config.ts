@@ -32,13 +32,15 @@ export const MIN_LOAN = 100_000;
 
 /**
  * Retiros de las cajitas:
- * - Cada aporte tiene un plazo según el nivel, contado desde ese aporte. Es independiente del plazo
+ * - Cada aporte dura un año, contado desde ese aporte, en cualquier nivel. Es independiente del plazo
  *   máximo de los créditos (LEVELS.maxDays): cambiar uno no cambia el otro.
  * - Antes del plazo solo se puede sacar este porcentaje del aporte (capital + rendimiento).
  * - Máximo por retiro en dólares; se pasa a pesos con la tasa de mercado (src/lib/fx.ts).
  */
-export const INVESTMENT_TERM_DAYS: Record<Level, number> = { 1: 120, 2: 90, 3: 60 };
+export const INVESTMENT_TERM_DAYS: Record<Level, number> = { 1: 365, 2: 365, 3: 365 };
 export const investmentTermDays = (level: Level) => INVESTMENT_TERM_DAYS[level];
+/** "1 año" o "N días", para mostrar el plazo de un aporte */
+export const investmentTermLabel = (level: Level) => (INVESTMENT_TERM_DAYS[level] === 365 ? "1 año" : `${INVESTMENT_TERM_DAYS[level]} días`);
 export const EARLY_WITHDRAWAL_SHARE = 0.5;
 export const MAX_WITHDRAWAL_USD = 30_000;
 
