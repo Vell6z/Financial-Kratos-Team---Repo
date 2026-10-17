@@ -51,11 +51,11 @@ Por eso el dataset tiene trampas realistas que el modelo debe aprender. Un ingre
 
 | Grupo | Filas | Qué pasó |
 |---|---|---|
-| `aprobado` | ≈ 4.780 | Nivel 1 a 3 por reglas. Crédito dentro del cupo y los plazos de su nivel |
-| `piloto` | ≈ 275 | Nivel 4, pero recibió un crédito pequeño ($100k–$300k) para aprender de los no aptos sin sesgo de selección |
-| `rechazado` | ≈ 950 | No se le prestó. Sin resultado (columnas de pago vacías) |
+| `aprobado` | ≈ 4.960 | Nivel 1 a 3 por reglas. Crédito dentro del cupo y los plazos de su nivel |
+| `piloto` | ≈ 225 | Nivel 4, pero recibió un crédito pequeño ($100k–$300k) para aprender de los no aptos sin sesgo de selección |
+| `rechazado` | ≈ 810 | No se le prestó. Sin resultado (columnas de pago vacías) |
 
-Para entrenar se usan solo las filas con `incumplio` lleno (≈ 5.050).
+Para entrenar se usan solo las filas con `incumplio` lleno (≈ 5.190).
 
 ### Variable objetivo
 
@@ -65,11 +65,11 @@ Tasas de incumplimiento resultantes:
 
 | Grupo | Incumplimiento |
 |---|---|
-| Global | 15 % |
+| Global | 18 % |
 | Nivel 1 | 2 % |
-| Nivel 2 | 7 % |
-| Nivel 3 | 20 % |
-| Piloto (nivel 4) | 49 % |
+| Nivel 2 | 10 % |
+| Nivel 3 | 25 % |
+| Piloto (nivel 4) | 52 % |
 
 ## Diccionario de datos
 
@@ -175,14 +175,14 @@ Tasas de incumplimiento resultantes:
 
 ## Resultado del modelo base
 
-En el conjunto de prueba (jul-sep 2026, 717 créditos, 13 % de incumplimiento):
+En el conjunto de prueba (jul-sep 2026, 780 créditos, 16 % de incumplimiento):
 
 | | AUC | Gini | KS | Mora si se aprueba el 70 % de menor riesgo |
 |---|---|---|---|---|
-| Cuestionario (reglas) | 0,74 | 0,48 | 0,39 | 7,4 % |
-| Regresión logística | **0,87** | **0,74** | **0,60** | **4,0 %** |
+| Cuestionario (reglas) | 0,72 | 0,44 | 0,35 | 10,1 % |
+| Regresión logística | **0,84** | **0,69** | **0,56** | **6,2 %** |
 
-Con la misma cantidad de aprobados, el modelo casi divide a la mitad la mora. Además:
+Con la misma cantidad de aprobados, el modelo baja la mora cerca de un 40 % (de 10,1 % a 6,2 %). Los créditos van de 2 a 24 cuotas según el nivel (plazos de 30 a 365, 150 y 90 días). Además:
 
 - **Calibración:** la probabilidad predicha coincide con la mora real por quintil.
 - **Equidad:** el riesgo medio predicho es similar para mujeres y hombres, sin usar el sexo.

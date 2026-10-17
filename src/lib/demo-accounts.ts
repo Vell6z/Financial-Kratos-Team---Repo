@@ -13,7 +13,7 @@ export const DEMO_ACCOUNTS = [
 const base = {
   phone: "3000000000",
   age: 30,
-  faceVerification: "pendiente" as const,
+  faceVerification: "aprobada" as const,
   documents: { idFront: "(demo)", idBack: "(demo)" },
 };
 

@@ -1,5 +1,5 @@
 import { handle } from "@/lib/api";
-import { requireRole, requireUser } from "@/lib/auth";
+import { requireRole, requireUser, requireVerifiedIdentity } from "@/lib/auth";
 import { withDB } from "@/lib/db";
 import { processPayouts } from "@/lib/payouts";
 import { BusinessError, effectiveLevel, loanView, requestLoan } from "@/lib/services";
@@ -28,6 +28,7 @@ export async function POST(request: Request) {
       const user = await requireUser(db);
       requireRole(user, "acreditado");
       if (!user.cedula) throw new BusinessError("Registra tu cédula para pedir un crédito");
+      requireVerifiedIdentity(user, "pedir un crédito");
       // La llave sale de la verificación Bre-B guardada en el servidor (POST /api/breb/verify)
       return requestLoan(db, user, Number(amount), Number(installments), String(verificationId ?? ""), confirmBeneficiary === true).id;
     });

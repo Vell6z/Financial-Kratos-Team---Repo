@@ -186,6 +186,26 @@ export interface PendingPayment {
   createdAt: number;
 }
 
+/** Resultado de la verificación facial del registro, sin imágenes. Para auditoría y revisión del admin. */
+export interface FaceCheck {
+  /** Modo con el que se verificó: local (gratis), un IDV de pago, o sin cámara (lo revisa el operador) */
+  mode: "local" | "provider" | "sin_camara";
+  /** ¿Pasó el reto de giro de cabeza? */
+  liveness: boolean;
+  /** Giro máximo de cabeza detectado, en grados */
+  yawRange: number;
+  /** Distancia 1:1 entre la selfie y el documento (menor = más parecidos) */
+  documentDistance: number;
+  /** Menor distancia encontrada en la deduplicación 1:N (null si la base estaba vacía) */
+  dedupDistance: number | null;
+  /** Si hubo un parecido en zona gris, a qué cédula (para que el operador compare) */
+  dedupMatchCedula?: string;
+  challenge: "turn_head" | "none";
+  /** Por qué quedó en revisión del operador */
+  reviewReason?: "parecido" | "duplicado_probable" | "sin_camara";
+  at: number;
+}
+
 export interface User {
   id: string;
   role: AccountRole;
@@ -217,8 +237,20 @@ export interface User {
   };
   /** Rutas privadas (no públicas) de las copias del documento de identidad */
   documents: { idFront: string; idBack: string };
-  /** La verificación facial aún no está implementada */
-  faceVerification: "pendiente" | "aprobada";
+  /**
+   * Estado de la verificación facial del registro:
+   * - "aprobada": liveness + match 1:1 pasaron y no hubo duplicado.
+   * - "pendiente": zona gris de deduplicación, a la espera de revisión del operador (admin).
+   * - "rechazada": el operador la rechazó (duplicado confirmado o identidad no coincide).
+   */
+  faceVerification: "pendiente" | "aprobada" | "rechazada";
+  /**
+   * Vector facial geométrico para deduplicar (src/lib/face-descriptor.ts), CIFRADO en reposo
+   * (AES-256-GCM, ver faceverify.ts). NUNCA se guarda la imagen de la cara, solo este descriptor.
+   */
+  faceDescriptor?: string;
+  /** Rastro del resultado de la verificación, sin imágenes (para auditoría y revisión). */
+  faceCheck?: FaceCheck;
   /** Hasta cuándo (reloj de la demo) vio sus notificaciones */
   notificationsSeenAt?: number;
   createdAt: number;

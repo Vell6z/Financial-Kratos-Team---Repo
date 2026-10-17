@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Alert, Badge, Button, Card, Choice, Input, MoneyInput, PasswordInput, Select } from "@/components/ui";
+import { Alert, Button, Card, Choice, Input, MoneyInput, PasswordInput, Select } from "@/components/ui";
+import { FaceCapture, type FaceCaptureResult } from "./face-capture";
 import {
   BORROWER_INCOME_SOURCES,
   CURRENCIES,
@@ -39,15 +40,20 @@ export function RegisterWizard() {
     role: initialRole === "inversor" || initialRole === "acreditado" ? initialRole : "",
   });
   const [files, setFiles] = useState<Files>({ idFront: null, idBack: null });
+  const [face, setFace] = useState<FaceCaptureResult | null>(null);
   const [step, setStep] = useState(0);
-  const [touched, setTouched] = useState<Partial<Record<keyof RegistrationData | "idFront" | "idBack", boolean>>>({});
+  const [touched, setTouched] = useState<Partial<Record<keyof RegistrationData | "idFront" | "idBack" | "face", boolean>>>({});
   const [submitted, setSubmitted] = useState(false);
   const [serverError, setServerError] = useState("");
   const [busy, setBusy] = useState(false);
 
-  const errors: FieldErrors & { idFront?: string | null; idBack?: string | null } =
+  const errors: FieldErrors & { idFront?: string | null; idBack?: string | null; face?: string | null } =
     step === 2
-      ? { idFront: validateIdFile(files.idFront, "lado principal"), idBack: validateIdFile(files.idBack, "lado secundario") }
+      ? {
+          idFront: validateIdFile(files.idFront, "lado principal"),
+          idBack: validateIdFile(files.idBack, "lado secundario"),
+          face: face ? null : "Completa la verificación facial para continuar",
+        }
       : fieldErrors(step, data);
   const show = (k: keyof typeof errors) => ((submitted || touched[k]) && errors[k]) || undefined;
 
@@ -86,6 +92,11 @@ export function RegisterWizard() {
       for (const [k, v] of Object.entries(data)) body.set(k, v);
       body.set("idFront", files.idFront!);
       body.set("idBack", files.idBack!);
+      if (face?.skipped) body.set("faceSkipped", "1");
+      else if (face) {
+        body.set("faceDescriptor", JSON.stringify(face.descriptor));
+        body.set("faceFrames", JSON.stringify(face.frames));
+      }
       const res = await fetch("/api/auth/register", { method: "POST", body });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "No se pudo crear la cuenta");
@@ -282,18 +293,12 @@ export function RegisterWizard() {
               <li>• Foto nítida, sin reflejos y con los cuatro bordes visibles.</li>
               <li>• Formatos JPG, PNG, WEBP o PDF de máximo 5 MB.</li>
             </ul>
-            <div className="flex items-center justify-between gap-4 rounded-lg border border-dashed border-line p-4">
-              <div>
-                <div className="text-sm font-medium">Verificación facial</div>
-                <div className="text-xs text-muted">Te pediremos una selfie para confirmar que eres tú.</div>
-              </div>
-              <div className="flex items-center gap-2">
-                <Badge tone="warn">Próximamente</Badge>
-                <Button type="button" variant="ghost" disabled>
-                  Iniciar
-                </Button>
-              </div>
-            </div>
+            <FaceCapture done={Boolean(face)} skipped={face?.skipped} onCapture={setFace} onClear={() => setFace(null)} />
+            {show("face") && (
+              <p className="text-xs text-red-600 dark:text-red-400" role="alert">
+                ● {show("face")}
+              </p>
+            )}
           </>
         )}
 

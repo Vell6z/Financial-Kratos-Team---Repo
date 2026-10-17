@@ -28,6 +28,20 @@ export async function GET() {
         investorBalance: db.positions.reduce((s, p) => s + p.balance, 0),
         loans: db.loans.map((l) => loanView(db, l)),
         txs: db.txs.slice(0, 40),
+        // Cola de revisión de verificaciones faciales en zona gris (sin el descriptor biométrico)
+        faceReviews: db.users
+          .filter((u) => u.faceVerification === "pendiente" && u.faceCheck)
+          .map((u) => ({
+            id: u.id,
+            name: u.name,
+            cedula: u.cedula,
+            at: u.faceCheck!.at,
+            dedupDistance: u.faceCheck!.dedupDistance,
+            dedupMatchCedula: u.faceCheck!.dedupMatchCedula ?? null,
+            yawRange: u.faceCheck!.yawRange,
+            mode: u.faceCheck!.mode,
+            reason: u.faceCheck!.reviewReason ?? (u.faceCheck!.dedupDistance !== null ? "parecido" : "sin_camara"),
+          })),
       };
     });
   });

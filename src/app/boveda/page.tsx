@@ -15,6 +15,17 @@ interface State {
   investorBalance: number;
   loans: { id: string; status: string; overdue: boolean; level: Level }[];
   txs: { id: string; at: number; kind: string; level: Level; amountCop: number; detail: string; mode: string }[];
+  faceReviews: {
+    id: string;
+    name: string;
+    cedula: string;
+    at: number;
+    dedupDistance: number | null;
+    dedupMatchCedula: string | null;
+    yawRange: number;
+    mode: string;
+    reason: "parecido" | "duplicado_probable" | "sin_camara";
+  }[];
 }
 
 const KIND: Record<string, { label: string; sign: string }> = {
@@ -92,6 +103,19 @@ export default function VaultPage() {
     }
   }
 
+  async function resolveFace(userId: string, approve: boolean) {
+    setBusy(true);
+    try {
+      await api("/api/admin", { action: approve ? "face-approve" : "face-reject", userId });
+      await load();
+      toast(approve ? "success" : "info", approve ? "Verificación aprobada" : "Verificación rechazada", approve ? "El usuario ya puede pedir crédito o invertir." : "La cuenta queda bloqueada: ya no puede iniciar sesión.");
+    } catch (e) {
+      toast("error", "No se pudo resolver", (e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   if (!state)
     return (
       <p className="flex items-center gap-2 text-muted">
@@ -118,6 +142,50 @@ export default function VaultPage() {
         <Alert tone="warning" title="Créditos esperando fondeo">
           Algún pool no tiene liquidez suficiente. Se desembolsarán automáticamente cuando entren inversiones o pagos.
         </Alert>
+      )}
+
+      {state.faceReviews.length > 0 && (
+        <Card className="space-y-3">
+          <div className="flex items-center justify-between gap-2">
+            <div>
+              <h2 className="font-semibold">Verificación facial en revisión</h2>
+              <p className="text-sm text-muted">
+                Cuentas que no pueden pedir crédito ni invertir hasta que las revises: rostros parecidos a otra cuenta o registros sin
+                cámara (verifica la identidad por otro medio, por ejemplo una videollamada).
+              </p>
+            </div>
+            <Badge tone="warn">{state.faceReviews.length} pendiente(s)</Badge>
+          </div>
+          <ul className="divide-y divide-line">
+            {state.faceReviews.map((r) => (
+              <li key={r.id} className="flex flex-wrap items-center justify-between gap-3 py-3 text-sm">
+                <div>
+                  <div className="font-medium">
+                    {r.name} <span className="text-muted">· CC {r.cedula}</span>
+                  </div>
+                  <div className="text-xs text-muted">
+                    {r.reason === "sin_camara" ? (
+                      <>{fmtDate(r.at)} · se registró sin cámara: falta verificar su identidad</>
+                    ) : (
+                      <>
+                        {fmtDate(r.at)} · {r.reason === "duplicado_probable" ? "muy parecido" : "parecido"} a CC {r.dedupMatchCedula ?? "—"} · distancia{" "}
+                        {r.dedupDistance !== null ? r.dedupDistance.toFixed(3) : "—"} · giro {r.yawRange}°
+                      </>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button variant="ghost" disabled={busy} onClick={() => resolveFace(r.id, true)}>
+                    {r.reason === "sin_camara" ? "Identidad verificada" : "Es otra persona"}
+                  </Button>
+                  <Button variant="danger" disabled={busy} onClick={() => resolveFace(r.id, false)}>
+                    {r.reason === "sin_camara" ? "Rechazar" : "Es duplicado"}
+                  </Button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </Card>
       )}
 
       <ConfirmDialog

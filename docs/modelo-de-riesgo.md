@@ -50,7 +50,7 @@ El estudio **no pregunta** sexo, edad exacta, etnia, estado civil, religión ni 
 | | Nivel 1 | Nivel 2 | Nivel 3 |
 |---|---|---|---|
 | Techo del monto | $5.000.000 | $3.000.000 | $1.000.000 |
-| Plazo (el cliente elige) | 30 a 120 días | 30 a 90 días | 30 a 60 días |
+| Plazo (el cliente elige) | 30 a 365 días | 30 a 150 días | 30 a 90 días |
 | Tasa efectiva anual | 24 % | 30 % | 36 % |
 | Frecuencia | Cada 15 días (mín. 2 cuotas) | Cada 15 días (mín. 2 cuotas) | Cada 15 días (mín. 2 cuotas) |
 
@@ -166,10 +166,10 @@ La pantalla de resultado muestra la probabilidad, si el modelo subió, bajó o c
 
 | | Aprobados | Mora de los aprobados |
 |---|---|---|
-| Solo reglas | 4.779 | 13,2 % |
-| Reglas + ML | 4.211 | 7,9 % |
+| Solo reglas | 4.963 | 16,6 % |
+| Reglas + ML | 4.227 | 10,2 % |
 
-Con el ajuste, el nivel 1 pasa de 111 a 1.574 personas con 1,3 % de mora: las reglas eran demasiado estrictas con quien solo declara.
+Con el ajuste, el nivel 1 pasa de 111 a 1.428 personas con 1,5 % de mora: las reglas eran demasiado estrictas con quien solo declara.
 
 **Recomendaciones (niveles 1 a 3):** subir la factura · subir la libreta o pedir confirmación de la natillera · pedir a las referencias que confirmen · en niveles 2 y 3, "paga tu crédito a tiempo y subes un nivel".
 
@@ -187,9 +187,9 @@ Puntaje → nivel de reglas → nivel final con ML (probabilidad de atraso).
 
 | Perfil | Solo declarado | Con documentos | Documentos + referencias confirmadas |
 |---|---|---|---|
-| Vendedora de arepas | 56 → N2 → **N1** (2,1 %) | 74 → N1 (3,2 %) | 84 → N1 (1,0 %) |
-| Ambulante con gota a gota | 34 → N4 | 44 → N3 → **N4** (45,8 %) | 49 → N3 → **N4** (31,9 %) |
-| Joven sin historial | 48 → N3 → **N2** (0,6 %) | 55 → N2 → **N1** (0,9 %) | 58 → N2 → **N1** (0,5 %) |
+| Vendedora de arepas | 56 → N2 (6,2 %) | 74 → N1 (18,8 %) | 84 → N1 (7,1 %) |
+| Ambulante con gota a gota | 34 → N4 | 44 → N3 → **N4** (50,8 %) | 49 → N3 → **N4** (37,3 %) |
+| Joven sin historial | 48 → N3 → **N2** (1,2 %) | 55 → N2 → **N1** (1,1 %) | 58 → N2 → **N1** (0,7 %) |
 | Sobreendeudada | N4 | N4 | N4 (no le sobra plata) |
 
 Las diferencias de 1 a 3 puntos frente al documento del equipo vienen de las respuestas de personalidad usadas en la prueba. **La evidencia mueve el nivel:** ese es el incentivo para respaldar lo que se dice.

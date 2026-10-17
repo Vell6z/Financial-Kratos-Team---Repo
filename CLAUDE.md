@@ -71,9 +71,9 @@ python3 ml/train_baseline.py   # entrena el modelo base y escribe ml/modelo/regr
 
 | Nivel | Tasa EA | Techo | Plazo del crédito | Plazo de cada aporte del inversionista |
 |---|---|---|---|---|
-| 1 (riesgo bajo) | 24 % | $5.000.000 | 30–120 días | 120 días |
-| 2 (riesgo medio) | 30 % | $3.000.000 | 30–90 días | 90 días |
-| 3 (riesgo alto) | 36 % | $1.000.000 | 30–60 días | 60 días |
+| 1 (riesgo bajo) | 24 % | $5.000.000 | 30–365 días | 120 días |
+| 2 (riesgo medio) | 30 % | $3.000.000 | 30–150 días | 90 días |
+| 3 (riesgo alto) | 36 % | $1.000.000 | 30–90 días | 60 días |
 
 **Crédito**
 - Mínimo **2 cuotas**, una **cada 15 días** contados desde el desembolso (no por quincenas del calendario), sistema francés. `MIN_INSTALLMENTS` en `config.ts`.

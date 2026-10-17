@@ -222,10 +222,22 @@ export async function startPayment(opts: {
 export function verifyInteractHash(p: { clientNonce?: string; interactNonce?: string; authServer?: string }, interactRef: string, hash: string | null) {
   if (!p.clientNonce || !p.interactNonce || !p.authServer) return true;
   if (!hash) return false;
-  const endpoint = p.authServer.endsWith("/") ? p.authServer : `${p.authServer}/`;
-  const expected = Buffer.from(createHash("sha256").update(`${p.clientNonce}\n${p.interactNonce}\n${interactRef}\n${endpoint}`).digest("base64"));
-  const got = Buffer.from(hash);
-  return expected.length === got.length && timingSafeEqual(expected, got);
+  // El último componente del hash (GNAP) es el "grant endpoint": el ORIGIN del servidor de
+  // autorización con "/", no el authServer con su ruta de recurso. Probamos ambos por robustez.
+  const withSlash = (s: string) => (s.endsWith("/") ? s : `${s}/`);
+  let origin = p.authServer;
+  try {
+    origin = new URL(p.authServer).origin;
+  } catch {
+    // authServer no es una URL válida: se usa tal cual
+  }
+  // La red de prueba usa el origin del authServer con "/"; se prueban variantes por robustez.
+  const candidates = [withSlash(origin), withSlash(p.authServer)];
+  for (const endpoint of candidates) {
+    const expected = createHash("sha256").update(`${p.clientNonce}\n${p.interactNonce}\n${interactRef}\n${endpoint}`).digest("base64");
+    if (expected.length === hash.length && timingSafeEqual(Buffer.from(expected), Buffer.from(hash))) return true;
+  }
+  return false;
 }
 
 /** Completa el pago después de que el usuario aprobó en su wallet y espera a que Interledger lo liquide. */

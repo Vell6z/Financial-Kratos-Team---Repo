@@ -23,8 +23,8 @@ export function notificationsFor(db: DB, user: User): Notification[] {
     list.push({
       id: "face",
       tone: "info",
-      title: "Verificación facial pendiente",
-      body: "Pronto te pediremos una selfie para completar tu verificación de identidad.",
+      title: "Verificación de identidad en revisión",
+      body: "Nuestro equipo está revisando tu verificación facial. Mientras tanto puedes usar la app, pero no pedir crédito ni invertir.",
       at: user.createdAt,
     });
 

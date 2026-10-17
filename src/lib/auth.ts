@@ -12,13 +12,15 @@ import { BusinessError } from "./services";
 export const SESSION_COOKIE = "kratos_session";
 const SESSION_DAYS = 7;
 
-export type PublicUser = Omit<User, "passwordHash" | "salt" | "documents">;
+export type PublicUser = Omit<User, "passwordHash" | "salt" | "documents" | "faceDescriptor">;
 
 export function toPublic(user: User): PublicUser {
-  const { passwordHash, salt, documents, ...rest } = user;
+  // El descriptor facial es dato biométrico sensible: nunca sale al cliente.
+  const { passwordHash, salt, documents, faceDescriptor, ...rest } = user;
   void passwordHash;
   void salt;
   void documents;
+  void faceDescriptor;
   return rest;
 }
 
@@ -57,7 +59,16 @@ export function checkRegistration(db: DB, d: RegistrationData) {
   if (db.users.some((u) => u.cedula === d.cedula.trim())) throw new BusinessError("Ya existe una cuenta con ese documento");
 }
 
-export function register(db: DB, d: RegistrationData, extra: { id: string; wallet?: string; documents: User["documents"] }) {
+export function register(
+  db: DB,
+  d: RegistrationData,
+  extra: {
+    id: string;
+    wallet?: string;
+    documents: User["documents"];
+    face?: { verification: User["faceVerification"]; descriptor?: string; check?: User["faceCheck"] };
+  },
+) {
   checkRegistration(db, d);
   const salt = randomBytes(16).toString("hex");
   const firstName = d.firstName.trim();
@@ -78,7 +89,9 @@ export function register(db: DB, d: RegistrationData, extra: { id: string; walle
     salt,
     passwordHash: hash(d.password, salt),
     documents: extra.documents,
-    faceVerification: "pendiente",
+    faceVerification: extra.face?.verification ?? "pendiente",
+    faceDescriptor: extra.face?.descriptor,
+    faceCheck: extra.face?.check,
     createdAt: Date.now(),
   };
   if (d.role === "inversor") {
@@ -104,6 +117,8 @@ export function login(db: DB, emailInput: string, password: string) {
   const email = emailInput?.trim().toLowerCase();
   const user = db.users.find((u) => u.email === email);
   if (!user || !checkPassword(user, password ?? "")) throw new BusinessError("Correo o contraseña incorrectos");
+  if (user.faceVerification === "rechazada")
+    throw new BusinessError("Tu cuenta fue bloqueada en la verificación de identidad. Si crees que es un error, escríbenos.");
   return { user, token: startSession(db, user.id) };
 }
 
@@ -118,7 +133,18 @@ function userForToken(db: DB, token: string | undefined) {
   if (!token) return null;
   const session = db.sessions.find((s) => s.token === token);
   if (!session || Date.now() - session.createdAt > SESSION_DAYS * 86_400_000) return null;
-  return db.users.find((u) => u.id === session.userId) ?? null;
+  const user = db.users.find((u) => u.id === session.userId) ?? null;
+  // Una cuenta rechazada en la verificación facial pierde también las sesiones abiertas
+  return user?.faceVerification === "rechazada" ? null : user;
+}
+
+/**
+ * Operaciones con dinero (pedir crédito, verificar la llave para el crédito, invertir) exigen la identidad
+ * verificada. Con la verificación facial en revisión del operador, la cuenta sirve pero no mueve plata.
+ */
+export function requireVerifiedIdentity(user: User, action: string) {
+  if (user.faceVerification !== "aprobada")
+    throw new BusinessError(`Tu verificación de identidad está en revisión. Cuando el equipo la apruebe podrás ${action}.`);
 }
 
 /** Usuario de la sesión actual (solo lectura), o null. */

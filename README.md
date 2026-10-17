@@ -26,9 +26,9 @@ Inversionista ──Interledger──▶ Bóveda (cajita por nivel) ──Bre-B�
 
 | Nivel | Riesgo | Tasa EA | Monto máx. | Plazo |
 |---|---|---|---|---|
-| 1 | Bajo | 24% | $5.000.000 | 30–120 días |
-| 2 | Medio | 30% | $3.000.000 | 30–90 días |
-| 3 | Alto | 36% | $1.000.000 | 30–60 días |
+| 1 | Bajo | 24% | $5.000.000 | 30–365 días |
+| 2 | Medio | 30% | $3.000.000 | 30–150 días |
+| 3 | Alto | 36% | $1.000.000 | 30–90 días |
 
 - **Inversión tipo "cajita"**: el inversionista elige un nivel y su saldo crece con interés compuesto a la tasa del nivel.
 - **Retiros**: cada aporte tiene su propio plazo según el nivel (120, 90 o 60 días, el plazo máximo de los créditos de ese nivel).

@@ -18,26 +18,27 @@ export interface LevelConfig {
 }
 
 export const LEVELS: Record<Level, LevelConfig> = {
-  1: { name: "Nivel 1", risk: "Riesgo bajo", rateEA: 0.24, maxAmount: 5_000_000, minDays: 30, maxDays: 120, seed: 20_000_000 },
-  2: { name: "Nivel 2", risk: "Riesgo medio", rateEA: 0.3, maxAmount: 3_000_000, minDays: 30, maxDays: 90, seed: 17_000_000 },
-  3: { name: "Nivel 3", risk: "Riesgo alto", rateEA: 0.36, maxAmount: 1_000_000, minDays: 30, maxDays: 60, seed: 13_000_000 },
+  1: { name: "Nivel 1", risk: "Riesgo bajo", rateEA: 0.24, maxAmount: 5_000_000, minDays: 30, maxDays: 365, seed: 20_000_000 },
+  2: { name: "Nivel 2", risk: "Riesgo medio", rateEA: 0.3, maxAmount: 3_000_000, minDays: 30, maxDays: 150, seed: 17_000_000 },
+  3: { name: "Nivel 3", risk: "Riesgo alto", rateEA: 0.36, maxAmount: 1_000_000, minDays: 30, maxDays: 90, seed: 13_000_000 },
 };
 
 /** Capital semilla total (supuesto: 50 millones COP repartidos entre los pools) */
 export const SEED_CAPITAL = LEVEL_IDS.reduce((sum, l) => sum + LEVELS[l].seed, 0);
 
 /** Montos mínimos (supuestos para la demo) */
-export const MIN_INVESTMENT = 50_000;
+export const MIN_INVESTMENT = 100_000;
 export const MIN_LOAN = 100_000;
 
 /**
  * Retiros de las cajitas:
- * - Plazo según el nivel: el mismo plazo máximo de los créditos de ese nivel (120, 90 o 60 días),
- *   contado desde la última inversión en esa cajita.
- * - Antes del plazo solo se puede sacar este porcentaje del saldo (capital + rendimiento).
+ * - Cada aporte tiene un plazo según el nivel, contado desde ese aporte. Es independiente del plazo
+ *   máximo de los créditos (LEVELS.maxDays): cambiar uno no cambia el otro.
+ * - Antes del plazo solo se puede sacar este porcentaje del aporte (capital + rendimiento).
  * - Máximo por retiro en dólares; se pasa a pesos con la tasa de mercado (src/lib/fx.ts).
  */
-export const investmentTermDays = (level: Level) => LEVELS[level].maxDays;
+export const INVESTMENT_TERM_DAYS: Record<Level, number> = { 1: 120, 2: 90, 3: 60 };
+export const investmentTermDays = (level: Level) => INVESTMENT_TERM_DAYS[level];
 export const EARLY_WITHDRAWAL_SHARE = 0.5;
 export const MAX_WITHDRAWAL_USD = 30_000;
 

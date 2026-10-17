@@ -1,5 +1,5 @@
 import { handle, parseLevel } from "@/lib/api";
-import { requireRole, requireUser } from "@/lib/auth";
+import { requireRole, requireUser, requireVerifiedIdentity } from "@/lib/auth";
 import { withDB, newId } from "@/lib/db";
 import { isInterledgerEnabled, normalizeWallet, startPayment } from "@/lib/openpayments";
 import { MIN_INVESTMENT } from "@/lib/config";
@@ -25,6 +25,7 @@ export async function POST(request: Request) {
     const wallet = await withDB(async (db) => {
       const user = await requireUser(db);
       requireRole(user, "inversor");
+      requireVerifiedIdentity(user, "invertir");
       if (body.wallet) user.wallet = normalizeWallet(String(body.wallet));
       if (!user.wallet) throw new BusinessError("Ingresa tu wallet address de Interledger");
       return user.wallet;

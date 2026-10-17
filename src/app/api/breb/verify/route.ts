@@ -1,5 +1,5 @@
 import { handle } from "@/lib/api";
-import { requireRole, requireUser } from "@/lib/auth";
+import { requireRole, requireUser, requireVerifiedIdentity } from "@/lib/auth";
 import { brebMode, holderMatches, resolveBrebKey } from "@/lib/breb";
 import { BREB_KEY_TYPE_IDS, brebKeyFormatError, normalizeBrebKey, type BrebKeyType } from "@/lib/breb-keys";
 import { newId, withDB } from "@/lib/db";
@@ -28,6 +28,7 @@ export async function POST(request: Request) {
     const user = await withDB(async (db) => {
       const u = await requireUser(db);
       requireRole(u, "acreditado");
+      requireVerifiedIdentity(u, "pedir un crédito");
       return u;
     });
 
