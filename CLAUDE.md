@@ -74,21 +74,32 @@ python3 ml/train_baseline.py   # entrena el modelo base y escribe ml/modelo/regr
 
 **Otros**
 - `ml/` — generador del dataset sintético, entrenamiento y README con el diccionario de datos.
-- `docs/modelo-de-riesgo.md` — modelo de riesgo detallado (pitch).
+- `docs/modelo-de-riesgo.md` — modelo de riesgo detallado (pitch). `docs/reglas-cambio-de-nivel.md` — cambio de nivel por historial de pagos (área financiera).
+- `src/lib/credit-history.ts` — estados de cuota y solicitud de pago (3 días), peor atraso, nivel del siguiente crédito, aviso del día 70 y reporte simulado del día 90 (`updateDelinquency` corre al cargar la base).
 - `README.md` — guía para correr y conectar las integraciones.
 
 ## Reglas de negocio clave
 
-| Nivel | Tasa EA | Techo | Plazo del crédito |
-|---|---|---|---|
-| 1 (riesgo bajo) | 24 % | $5.000.000 | 30–365 días |
-| 2 (riesgo medio) | 30 % | $3.000.000 | 30–150 días |
-| 3 (riesgo alto) | 36 % | $1.000.000 | 30–90 días |
+| Nivel | Tasa del acreditado | Rentabilidad esperada del inversionista | Techo | Plazo del crédito |
+|---|---|---|---|---|
+| 1 (riesgo bajo) | 24 % | 15,3 % | $5.000.000 | 30–365 días |
+| 2 (riesgo medio) | 30 % | 17,9 % | $3.000.000 | 30–150 días |
+| 3 (riesgo alto) | 36 % | 19,6 % | $1.000.000 | 30–90 días |
+
+Decisiones del área financiera (17-oct-2026), en `config.ts`:
+- Rentabilidad del inversionista = 85 % × (tasa del acreditado − reserva para impagos 3/6/10 puntos − comisión 3 puntos). Siempre "**rentabilidad esperada**", nunca garantizada ni fija (`EXPECTED_RETURN_NOTE`).
+- **Encaje del 15 %**: el capital de un pool se presta solo hasta el 85 % (`fundWaitingLoans`).
+- Cada nivel es su propio pool. La reserva para impagos y el reparto de pérdidas a prorrata **solo van en el pitch** (no están en el código).
 
 **Crédito**
 - Mínimo **2 cuotas**, una **cada 15 días** contados desde el desembolso (no por quincenas del calendario), sistema francés. `MIN_INSTALLMENTS` en `config.ts`.
 - Cupo = el menor entre el techo del nivel y el valor presente de la cuota máxima (50 % de lo que le sobra cada 15 días).
-- Si el pool no tiene capital, el crédito queda **en espera de fondeo**.
+- Si el pool no tiene capital (respetando el encaje), el crédito queda **en espera de fondeo**.
+- Crédito **productivo**: antes de solicitar elige el destino (`CREDIT_PURPOSES`) y acepta el contrato y el pagaré (simulados).
+- **Solicitud de pago**: el día del vencimiento, 3 días para pagar (`DELINQUENCY.daysToPay`). Estados `PENDIENTE`, `POR_PAGAR`, `PAGADA`, `EN_MORA` (desde el día 4), `PAGADA_CON_MORA`. Atraso contado desde el vencimiento. Sin interés de mora. Sin pago anticipado con descuento.
+- **Nivel del siguiente crédito** por el peor atraso (`LEVEL_CHANGE`): 0–3 días sube, 4–15 se mantiene, 16–30 baja, 31–89 nivel 4 mientras deba (luego 3), 90+ nivel 4 y bloqueado 12 meses. Con historial manda el historial, no el estudio.
+- **Día 70** de mora: aviso previo. **Día 90**: reporte **simulado** a centrales de riesgo ("SIMULACIÓN: …"), castigo y bloqueo; si paga después, "obligación pagada". Solo datos de la obligación (Ley 1581).
+- Cobranza: solo recordatorios a la persona; nunca contactar referencias ni familia.
 
 **Inversión y retiros**
 - Capital semilla de $50 M (supuesto).
@@ -180,11 +191,10 @@ Wallets de prueba (en `.env`, no en el código):
 
 ## Pendientes
 
-**En espera del área financiera (no implementar sin decisión)**
-- Reparto de pérdidas por impagos entre los inversionistas (pool, seguro o reserva).
-- Intereses de mora, recordatorios, cobranza y bajada de nivel por atrasos.
-- Pago anticipado con descuento de intereses.
-- Contrato o pagaré y encuadre como crédito productivo (usura).
+**Solo pitch (decidido por el área financiera, no implementar en el MVP)**
+- Reserva para impagos y reparto de pérdidas a prorrata entre los inversionistas del nivel.
+- Interés de mora, acuerdos de pago y pago anticipado.
+- Retiros en fila cuando los retiros anticipados superan el encaje (hoy se rechazan con un mensaje).
 
 **Se pueden hacer ya**
 - Prueba de punta a punta de una inversión y un retiro reales: aprobar en la wallet `usdtroly` y autorizar la bóveda en `/boveda`.

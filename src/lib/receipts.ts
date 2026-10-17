@@ -1,6 +1,6 @@
 import "server-only";
 import { bankName, BREB_KEY_TYPES, type BrebKeyType } from "./breb-keys";
-import { APP_NAME, APP_SLUG, EARLY_WITHDRAWAL_SHARE, LEVELS } from "./config";
+import { APP_NAME, APP_SLUG, EARLY_WITHDRAWAL_SHARE, EXPECTED_RETURN_NOTE, fmtRate, LEVELS } from "./config";
 import { intervalLabel } from "./recurring-interval";
 import type { DB, Loan, Tx } from "./db";
 import { cop } from "./finance";
@@ -79,7 +79,8 @@ function investmentPdf(tx: Tx, now: number) {
     doc.paragraph(`Pediste ${cop(r.requestedCop)}; ${deposit ? "se abonó" : "se descontó"} lo que confirmó la wallet que recibe.`, { size: 9, color: COLORS.amber });
 
   doc.section("Detalle");
-  doc.row("Cajita", `${level.name} · ${level.risk} · ${(level.rateEA * 100).toFixed(0)} % EA`);
+  doc.row("Cajita", `${level.name} · ${level.risk} · ${fmtRate(level.investorRateEA)} E.A. esperada`);
+  doc.row("Rentabilidad", EXPECTED_RETURN_NOTE, { small: true });
   doc.row(deposit ? "Desde tu wallet" : "Hacia tu wallet", r?.investorWallet ?? tx.wallet ?? "—", { small: true });
   if (r?.vaultWallet) doc.row(deposit ? "Hacia la bóveda" : "Desde la bóveda", r.vaultWallet, { small: true });
   doc.row("Medio", r?.demo ? "Precargado para la demo (sin Interledger)" : tx.mode === "interledger" ? "Interledger · Open Payments (red de prueba)" : "Simulado (sin Open Payments)");

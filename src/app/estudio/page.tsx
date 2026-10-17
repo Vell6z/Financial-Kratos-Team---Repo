@@ -191,8 +191,9 @@ function Wizard({ first, onDone }: { first: boolean; onDone: (s: StudyView) => v
             </Check>
             <Check checked={a.consent} onChange={(v) => set("consent", v)} error={err("consent")}>
               Autorizo el tratamiento de mis datos personales (Ley 1581 de 2012 y Ley 1266 de 2008) solo para evaluar mi crédito, que
-              contacten a mis referencias y que los documentos que suba se lean con inteligencia artificial (Google Gemini). Puedo revocar
-              esta autorización cuando quiera.
+              contacten a mis referencias y que los documentos que suba se lean con inteligencia artificial (Google Gemini). Si recibo un
+              crédito y no lo pago, autorizo que los datos de esa obligación se reporten a las centrales de riesgo, con aviso previo (Ley 1266
+              de 2008). Puedo revocar esta autorización cuando quiera.
             </Check>
           </>
         )}

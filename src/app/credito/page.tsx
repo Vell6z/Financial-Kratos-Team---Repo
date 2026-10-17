@@ -5,9 +5,9 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { BrebQrScanner } from "@/components/breb-qr-scanner";
 import { ConfirmDialog, useToast } from "@/components/feedback";
-import { Alert, Badge, Button, Card, Input, MoneyInput, PageHeader, Spinner, api } from "@/components/ui";
+import { Alert, Badge, Button, Card, Choice, Input, MoneyInput, PageHeader, Spinner, api } from "@/components/ui";
 import { bankName, BREB_KEY_TYPE_IDS, BREB_KEY_TYPES, SANDBOX_KEYS, brebKeyFormatError, detectBrebKeyType, normalizeBrebKey, type BrebKeyType } from "@/lib/breb-keys";
-import { INSTALLMENT_DAYS, LEVELS, MIN_INSTALLMENTS, MIN_LOAN, type Level } from "@/lib/config";
+import { CREDIT_PURPOSES, DELINQUENCY, INSTALLMENT_DAYS, LEVELS, MIN_INSTALLMENTS, MIN_LOAN, type CreditPurpose, type Level } from "@/lib/config";
 import { buildSchedule, cop, pct } from "@/lib/finance";
 import { creditLimit } from "@/lib/scoring";
 import { validateMoney } from "@/lib/validators";
@@ -115,6 +115,10 @@ function LoanOffer({ evaluation, defaultLlave, onDone }: { evaluation: Evaluatio
   const [touched, setTouched] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  // Crédito productivo: para qué lo usará, y la aceptación del contrato y el pagaré (simulados)
+  const [purpose, setPurpose] = useState<CreditPurpose | "">("");
+  const [contractOpen, setContractOpen] = useState(false);
+  const [accepted, setAccepted] = useState(false);
   const toast = useToast();
 
   const value = Number(amount) || 0;
@@ -159,7 +163,7 @@ function LoanOffer({ evaluation, defaultLlave, onDone }: { evaluation: Evaluatio
   async function verify(from?: { key: string; keyType: BrebKeyType }) {
     setTouched(true);
     const target = from ?? { key, keyType };
-    if (amountError || tooHigh || (!from && llaveError)) return;
+    if (amountError || tooHigh || !purpose || (!from && llaveError)) return;
     setVerifying(true);
     setError("");
     setFromQr(Boolean(from));
@@ -188,6 +192,8 @@ function LoanOffer({ evaluation, defaultLlave, onDone }: { evaluation: Evaluatio
         installments: n,
         verificationId: verification.id,
         confirmBeneficiary: true,
+        purpose,
+        acceptTerms: accepted,
       });
       if (loan.status === "activo") toast("success", "¡Crédito desembolsado!", `Enviamos ${cop(value)} a tu llave Bre-B ${verification.key}.`);
       else if (loan.status === "cancelado") toast("error", "No pudimos desembolsar", loan.disbursement?.rejectedReason ?? "Tu llave no pasó la verificación.");
@@ -196,6 +202,7 @@ function LoanOffer({ evaluation, defaultLlave, onDone }: { evaluation: Evaluatio
     } catch (e) {
       setError((e as Error).message);
       setVerification(null);
+      setContractOpen(false);
       setBusy(false);
     }
   }
@@ -311,6 +318,14 @@ function LoanOffer({ evaluation, defaultLlave, onDone }: { evaluation: Evaluatio
               </p>
             )}
           </div>
+          <Choice
+            label="¿Para qué vas a usar el crédito?"
+            required
+            value={purpose}
+            onChange={setPurpose}
+            options={CREDIT_PURPOSES.map((p) => ({ id: p.id, title: p.title, sub: p.sub }))}
+            error={touched && !purpose ? "Elige para qué lo usarás: es un crédito para tu negocio o tu trabajo" : null}
+          />
         </Card>
 
         <Card className="h-fit space-y-4 p-6 lg:sticky lg:top-20">
@@ -360,11 +375,10 @@ function LoanOffer({ evaluation, defaultLlave, onDone }: { evaluation: Evaluatio
       )}
 
       <ConfirmDialog
-        open={Boolean(verification)}
+        open={Boolean(verification) && !contractOpen}
         title="Beneficiario encontrado"
-        confirmLabel="Confirmar y solicitar crédito"
-        loading={busy}
-        onConfirm={request}
+        confirmLabel="Es mi cuenta, continuar"
+        onConfirm={() => (setAccepted(false), setContractOpen(true))}
         onCancel={() => setVerification(null)}
       >
         {verification && (
@@ -388,6 +402,46 @@ function LoanOffer({ evaluation, defaultLlave, onDone }: { evaluation: Evaluatio
             )}
           </div>
         )}
+      </ConfirmDialog>
+      {/* Contrato y pagaré SIMULADOS: el acreditado los acepta antes de solicitar */}
+      <ConfirmDialog
+        open={Boolean(verification) && contractOpen}
+        title="Contrato de crédito y pagaré"
+        confirmLabel="Acepto y solicito el crédito"
+        loading={busy}
+        onConfirm={() => (accepted ? request() : setError("Marca la casilla para aceptar el contrato."))}
+        onCancel={() => (setContractOpen(false), setVerification(null))}
+      >
+        <div className="space-y-3 text-sm">
+          <p className="rounded-lg bg-amber-500/10 px-3 py-2 text-xs font-semibold text-amber-700 dark:text-amber-300">
+            SIMULACIÓN: documento de demostración, sin validez legal.
+          </p>
+          <dl className="space-y-1.5 rounded-lg bg-brand-soft p-3">
+            <BeneficiaryRow k="Tipo" v="Microcrédito productivo" />
+            <BeneficiaryRow k="Destino" v={CREDIT_PURPOSES.find((p) => p.id === purpose)?.title ?? "—"} />
+            <BeneficiaryRow k="Monto" v={cop(value)} />
+            <BeneficiaryRow k="Tasa" v={`${pct(cfg.rateEA)} efectiva anual, fija`} />
+            <BeneficiaryRow k="Cuotas" v={`${n} de ${cop(schedule[0].payment)}, una cada ${INSTALLMENT_DAYS} días`} />
+            <BeneficiaryRow k="Total a pagar" v={cop(total)} />
+          </dl>
+          <ul className="list-disc space-y-1 pl-5 text-xs text-muted">
+            <li>La tasa está por debajo del tope de usura. No hay comisiones, seguros ni costos adicionales.</li>
+            <li>
+              Cada cuota tiene {DELINQUENCY.daysToPay} días para pagarse desde su vencimiento. Los atrasos bajan tu nivel para el siguiente crédito; en este piloto no hay interés
+              de mora.
+            </li>
+            <li>
+              Autorizo que, si llego a {DELINQUENCY.reportDays} días de mora y después de un aviso previo, los datos de esta obligación se reporten a las centrales de riesgo
+              (Ley 1266 de 2008).
+            </li>
+            <li>Firmo un pagaré por el valor del crédito a favor de la plataforma.</li>
+          </ul>
+          <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-line p-3">
+            <input type="checkbox" className="mt-0.5 h-4 w-4 shrink-0 accent-[var(--brand)]" checked={accepted} onChange={(e) => setAccepted(e.target.checked)} />
+            <span>Leí y acepto el contrato de crédito y el pagaré.</span>
+          </label>
+          {error && <Alert tone="error" title="No se pudo solicitar">{error}</Alert>}
+        </div>
       </ConfirmDialog>
     </div>
   );

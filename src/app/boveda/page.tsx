@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { ConfirmDialog, useToast } from "@/components/feedback";
 import { Alert, Badge, Button, Card, EmptyState, PageHeader, Spinner, Stat, api, fmtDate } from "@/components/ui";
-import { LEVEL_IDS, LEVELS, SEED_CAPITAL, VAULT_BREB, type Level } from "@/lib/config";
+import { fmtRate, LEVEL_IDS, LEVELS, SEED_CAPITAL, VAULT_BREB, type Level } from "@/lib/config";
 import { cop, pct } from "@/lib/finance";
 
 interface State {
@@ -15,6 +15,17 @@ interface State {
   investorBalance: number;
   loans: { id: string; status: string; overdue: boolean; level: Level }[];
   txs: { id: string; at: number; kind: string; level: Level; amountCop: number; detail: string; mode: string }[];
+  creditReports: {
+    loanId: string;
+    name: string;
+    level: Level;
+    status: "aviso" | "en_mora" | "pagada";
+    noticeAt: number;
+    reportedAt?: number;
+    paidAt?: number;
+    chargedOffAt: number | null;
+    snapshot?: { overdueBalance: number; amount: number };
+  }[];
   faceReviews: {
     id: string;
     name: string;
@@ -279,7 +290,9 @@ export default function VaultPage() {
           <Card key={l} className="space-y-3">
             <div className="flex items-center justify-between">
               <span className="font-semibold">Pool {LEVELS[l].name}</span>
-              <Badge>{pct(LEVELS[l].rateEA)} EA</Badge>
+              <Badge>
+                Acreditado {pct(LEVELS[l].rateEA)} · inversionista {fmtRate(LEVELS[l].investorRateEA)}
+              </Badge>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <Stat label="Disponible" value={<span className="text-base sm:text-xl">{cop(state.pools[l].liquidity)}</span>} />
@@ -289,6 +302,37 @@ export default function VaultPage() {
           </Card>
         ))}
       </div>
+
+      {state.creditReports.length > 0 && (
+        <Card className="space-y-3">
+          <div>
+            <h2 className="font-semibold">Reportes a centrales de riesgo</h2>
+            <p className="rounded-lg bg-red-500/10 px-3 py-2 text-xs font-semibold text-red-700 dark:text-red-300">
+              SIMULACIÓN: estos reportes no se envían a ninguna central de riesgo.
+            </p>
+          </div>
+          <ul className="divide-y divide-line text-sm">
+            {state.creditReports.map((r) => (
+              <li key={r.loanId} className="flex flex-wrap items-center justify-between gap-2 py-2">
+                <div>
+                  <div className="font-medium">
+                    {r.name} · crédito {r.loanId} · {LEVELS[r.level].name}
+                  </div>
+                  <div className="text-xs text-muted">
+                    Aviso {fmtDate(r.noticeAt)}
+                    {r.reportedAt ? ` · reportado ${fmtDate(r.reportedAt)}` : " · se reporta a los 90 días de mora"}
+                    {r.snapshot ? ` · saldo en mora ${cop(r.snapshot.overdueBalance)}` : ""}
+                    {r.chargedOffAt ? " · castigado" : ""}
+                  </div>
+                </div>
+                <Badge tone={r.status === "pagada" ? "warn" : "bad"}>
+                  {r.status === "aviso" ? "Aviso previo" : r.status === "en_mora" ? "Reportado en mora" : "Pagada después de mora"}
+                </Badge>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
 
       <Card className="space-y-3">
         <h2 className="font-semibold">Controles de demo</h2>

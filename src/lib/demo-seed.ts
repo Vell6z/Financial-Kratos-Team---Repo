@@ -49,7 +49,7 @@ export function seedDemoInvestments(db: DB, t: number) {
   const txs: Tx[] = [];
   const lots = DEMO_LOTS.map(({ level, daysAgo, amount }) => {
     const at = t - daysAgo * DAY_MS;
-    const lot: Lot = { id: id(), at, principal: amount, value: accrue(amount, LEVELS[level].rateEA, t - at), maturesAt: at + investmentTermDays(level) * DAY_MS, earlyWithdrawn: 0 };
+    const lot: Lot = { id: id(), at, principal: amount, value: accrue(amount, LEVELS[level].investorRateEA, t - at), maturesAt: at + investmentTermDays(level) * DAY_MS, earlyWithdrawn: 0 };
     txs.push({
       id: id(),
       at,
@@ -71,7 +71,7 @@ export function seedDemoInvestments(db: DB, t: number) {
     const at = t - w.daysAgo * DAY_MS;
     const early = lot.maturesAt > at;
     // Lo retirado habría seguido rentando hasta hoy: se descuenta con su rendimiento
-    lot.value -= accrue(w.amount, LEVELS[level].rateEA, t - at);
+    lot.value -= accrue(w.amount, LEVELS[level].investorRateEA, t - at);
     if (early) lot.earlyWithdrawn += w.amount;
     withdrawn[level] = (withdrawn[level] ?? 0) + w.amount;
     db.pools[level].liquidity -= w.amount;

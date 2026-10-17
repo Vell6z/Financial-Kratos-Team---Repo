@@ -31,6 +31,10 @@ export async function GET() {
         investorBalance: db.positions.reduce((s, p) => s + p.balance, 0),
         loans: db.loans.map((l) => loanView(db, l)),
         txs: db.txs.slice(0, 40),
+        // Avisos y reportes SIMULADOS a centrales de riesgo (solo datos de la obligación)
+        creditReports: db.loans
+          .filter((l) => l.creditReport && l.creditReport.status !== "al_dia")
+          .map((l) => ({ loanId: l.id, name: l.name, level: l.level, chargedOffAt: l.chargedOffAt ?? null, ...l.creditReport! })),
         // Cola de revisión de verificaciones faciales en zona gris (sin el descriptor biométrico)
         faceReviews: db.users
           .filter((u) => u.faceVerification === "pendiente" && u.faceCheck)

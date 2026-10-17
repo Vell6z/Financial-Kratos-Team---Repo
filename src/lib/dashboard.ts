@@ -2,7 +2,8 @@ import "server-only";
 import { requireUser } from "./auth";
 import { LEVELS } from "./config";
 import { withDB } from "./db";
-import { accrueAll, effectiveLevel, loanView } from "./services";
+import { applicantLevel } from "./credit-history";
+import { accrueAll, loanView } from "./services";
 
 /** Resumen de la pantalla de inicio según el rol de la sesión. */
 export function getDashboard() {
@@ -19,7 +20,7 @@ export function getDashboard() {
         wallet: user.wallet ?? null,
         balance,
         gains,
-        positions: positions.map((p) => ({ level: p.level, balance: p.balance, rate: LEVELS[p.level].rateEA })),
+        positions: positions.map((p) => ({ level: p.level, balance: p.balance, rate: LEVELS[p.level].investorRateEA })),
       };
     }
     const applicant = db.applicants.find((a) => a.cedula === user.cedula);
@@ -28,7 +29,7 @@ export function getDashboard() {
       role: "acreditado" as const,
       firstName: user.firstName,
       llaveBreb: user.borrowerProfile?.llaveBreb ?? null,
-      level: applicant ? effectiveLevel(applicant.scoreLevel, applicant.paidOnTime) : null,
+      level: applicant ? applicantLevel(db, applicant) : null,
       evaluated: Boolean(applicant),
       score: applicant?.score ?? null,
       paidOnTime: applicant?.paidOnTime ?? 0,

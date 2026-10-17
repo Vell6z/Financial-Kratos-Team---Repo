@@ -3,9 +3,9 @@ import { redirect } from "next/navigation";
 import { Icon } from "@/components/icons";
 import { Alert, Badge, Card, Stat, fmtDate } from "@/components/ui";
 import { UnauthorizedError } from "@/lib/auth";
-import { LEVELS } from "@/lib/config";
+import { fmtRate, LEVELS } from "@/lib/config";
 import { getDashboard } from "@/lib/dashboard";
-import { cop, pct } from "@/lib/finance";
+import { cop } from "@/lib/finance";
 import { NAV } from "@/lib/nav";
 import { walletLabel } from "@/lib/validators";
 
@@ -36,7 +36,7 @@ export default async function HomePage() {
             <div className="col-span-2 flex flex-wrap gap-2 sm:col-span-3">
               {data.positions.map((p) => (
                 <Badge key={p.level}>
-                  {LEVELS[p.level].name} · {pct(p.rate)} EA · {cop(p.balance)}
+                  {LEVELS[p.level].name} · {fmtRate(p.rate)} E.A. esperada · {cop(p.balance)}
                 </Badge>
               ))}
             </div>

@@ -9,6 +9,7 @@ import type { MLAssessment } from "./riesgo-ml";
 import type { IncomingRef, PaymentConfirmation, QuoteView } from "./openpayments";
 import type { DocKey, DocReading, StudyAnswers, StudyResult } from "./scoring";
 import { demoUsers } from "./demo-accounts";
+import { updateDelinquency } from "./credit-history";
 import { seedDemoInvestments } from "./demo-seed";
 
 // Persistencia mínima en un archivo JSON (suficiente para la demo; sin base de datos).
@@ -116,9 +117,42 @@ export interface Applicant {
   answers: StudyAnswers;
   /** Rutas privadas de los documentos opcionales que adjuntó */
   docs: Partial<Record<DocKey, string>>;
-  /** Créditos pagados completos y sin atrasos: cada uno sube un nivel */
+  /** Créditos pagados completos a tiempo (peor atraso dentro de los días de gracia) */
   paidOnTime: number;
+  /**
+   * Nivel que dio el historial de pagos del último crédito cerrado (src/lib/credit-history.ts).
+   * Con historial, manda sobre el nivel del estudio.
+   */
+  historyLevel?: Level;
+  /** Resultado del último crédito cerrado: peor atraso y a qué nivel pasó (4 = bloqueado) */
+  lastLoanResult?: { loanId: string; worstDelay: number; from: Level; to: Level | 4; closedAt: number };
+  /** No puede pedir crédito hasta esta fecha (90 días de mora: 12 meses), aunque pague */
+  blockedUntil?: number;
   evaluatedAt: number;
+}
+
+/** Reporte negativo SIMULADO a una central de riesgo: no se envía a ninguna central */
+export interface CreditReport {
+  /** Aviso previo (día 70 de mora) */
+  noticeAt: number;
+  /** Reporte (día 90 de mora) */
+  reportedAt?: number;
+  /** aviso: se avisó y aún no se reporta · al_dia: se puso al día antes del reporte · en_mora: reportado · pagada: pagó después del reporte */
+  status: "aviso" | "al_dia" | "en_mora" | "pagada";
+  /** Datos de la obligación al momento del reporte (solo lo necesario, Ley 1581) */
+  snapshot?: {
+    holderName: string;
+    documentType: "CC";
+    documentNumber: string;
+    obligationId: string;
+    obligationType: "Microcrédito productivo";
+    disbursedAt: number;
+    amount: number;
+    /** Capital pendiente de las cuotas vencidas */
+    overdueBalance: number;
+    daysLate: number;
+  };
+  paidAt?: number;
 }
 
 /** Estados del desembolso (en orden). Si la llave no se verifica, el crédito no se crea. */
@@ -201,6 +235,14 @@ export interface Loan {
   status: "en_espera" | "activo" | "pagado" | "cancelado";
   createdAt: number;
   disbursedAt?: number;
+  /** Para qué usará el crédito (crédito productivo) */
+  purpose?: string;
+  /** Aceptó el contrato y el pagaré (simulados) */
+  termsAcceptedAt?: number;
+  /** Castigo: el crédito se dio por perdido a los 90 días de mora (sigue recibiendo pagos) */
+  chargedOffAt?: number;
+  /** Aviso y reporte a centrales de riesgo (simulados) */
+  creditReport?: CreditReport;
 }
 
 /** Pago de Open Payments esperando que el usuario lo apruebe en su wallet */
@@ -416,6 +458,8 @@ async function load(): Promise<DB> {
   // Va fuera del try: un error aquí no debe confundirse con una base nueva
   for (const demo of demoUsers()) if (!db.users.some((u) => u.id === demo.id)) db.users.push(demo);
   seedDemoInvestments(db, now(db));
+  // Mora según el reloj de la demo: aviso del día 70, reporte simulado y castigo del día 90
+  updateDelinquency(db, now(db));
   return db;
 }
 

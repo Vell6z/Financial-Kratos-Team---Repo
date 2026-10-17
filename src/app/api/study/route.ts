@@ -2,7 +2,7 @@ import { promises as fs } from "fs";
 import path from "path";
 import { handle } from "@/lib/api";
 import { requireRole, requireUser } from "@/lib/auth";
-import { now, withDB } from "@/lib/db";
+import { withDB } from "@/lib/db";
 import { readDocuments, type UploadedDoc } from "@/lib/doc-reader";
 import { validateIdFile } from "@/lib/registration";
 import { DOC_KEYS, DOCS, type DocKey, type StudyAnswers } from "@/lib/scoring";
@@ -17,7 +17,7 @@ export async function GET() {
       const user = await requireUser(db);
       requireRole(user, "acreditado");
       const a = db.applicants.find((x) => x.cedula === user.cedula);
-      return { study: a ? studyView(a, now(db)) : null };
+      return { study: a ? studyView(db, a) : null };
     }),
   );
 }

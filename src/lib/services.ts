@@ -1,7 +1,8 @@
 import "server-only";
-import { DAY_MS, EARLY_WITHDRAWAL_SHARE, INSTALLMENT_DAYS, investmentTermDays, Level, LEVELS, MIN_INSTALLMENTS, MIN_INVESTMENT, MIN_LOAN, MIN_PAYMENT, VAULT_BREB } from "./config";
+import { CREDIT_PURPOSES, DAY_MS, EARLY_WITHDRAWAL_SHARE, INVESTOR_ECONOMICS, INSTALLMENT_DAYS, investmentTermDays, Level, LEVELS, MIN_INSTALLMENTS, MIN_INVESTMENT, MIN_LOAN, MIN_PAYMENT, VAULT_BREB } from "./config";
 import { Applicant, DB, DisbursementState, Loan, Lot, Payout, Position, Tx, TxKind, newId, now } from "./db";
 import { accrue, buildSchedule, cop } from "./finance";
+import { applicantLevel, closeLoanHistory, currentArrears, daysLate as lateDays, installmentState, levelOutlook, payDeadline } from "./credit-history";
 import { assessWithML, mlHint } from "./riesgo-ml";
 import { CONFIG, computeStudy, creditLimit, DOCS, type DocKey, type DocReading, type RiskLevel, type StudyAnswers } from "./scoring";
 import { validateMoney } from "./validators";
@@ -44,7 +45,8 @@ function ensureLots(p: Position): Lot[] {
 function accruePosition(db: DB, p: Position) {
   const t = now(db);
   const lots = ensureLots(p);
-  const growth = accrue(1, LEVELS[p.level].rateEA, t - p.lastAccrualAt);
+  // La cajita rinde a la rentabilidad esperada del inversionista (no a la tasa del acreditado)
+  const growth = accrue(1, LEVELS[p.level].investorRateEA, t - p.lastAccrualAt);
   for (const l of lots) l.value *= growth;
   p.balance = lots.reduce((s, l) => s + l.value, 0);
   p.lastAccrualAt = t;
@@ -203,11 +205,6 @@ export function refundWithdraw(db: DB, wallet: string, level: Level, amountCop: 
 
 // ---------- Estudio de crédito ----------
 
-export function effectiveLevel(scoreLevel: Level | null, paidOnTime: number): Level | null {
-  if (scoreLevel === null) return null;
-  return Math.max(1, scoreLevel - paidOnTime) as Level;
-}
-
 /** Guarda el estudio de crédito del acreditado y devuelve su resultado. `readings`: lo que se leyó de cada documento. */
 export function saveStudy(
   db: DB,
@@ -288,15 +285,18 @@ export function saveStudy(
     retryAt: riskLevel === 4 ? now(db) + CONFIG.retryDays * DAY_MS : undefined,
     evaluatedAt: now(db),
   });
-  return studyView(a, now(db));
+  return studyView(db, a);
 }
 
 /** Lo que el acreditado ve de su estudio (sin rutas de archivos ni respuestas) */
-export function studyView(a: Applicant, t: number) {
+export function studyView(db: DB, a: Applicant) {
+  const t = now(db);
   return {
     name: a.name,
     score: a.score,
-    level: effectiveLevel(a.scoreLevel, a.paidOnTime),
+    // Con historial de pagos manda el historial; bloqueado o en mora de más de 30 días: null
+    level: applicantLevel(db, a),
+    blockedUntil: a.blockedUntil && a.blockedUntil > t ? a.blockedUntil : null,
     recommendations: a.recommendations,
     breakdown: a.breakdown,
     maxInstallment: a.maxInstallment,
@@ -346,12 +346,20 @@ export function requestLoan(
   installments: number,
   verificationId: string,
   confirmedBeneficiary: boolean,
+  contract: { purpose: string; termsAccepted: boolean },
 ): Loan {
   const cedula = user.cedula;
   const a = db.applicants.find((x) => x.cedula === cedula);
   if (!a) throw new BusinessError("Primero debes hacer el estudio de crédito");
-  const level = effectiveLevel(a.scoreLevel, a.paidOnTime);
-  if (!level) throw new BusinessError("Tu estudio de crédito no fue aprobado todavía");
+  const level = applicantLevel(db, a);
+  if (!level)
+    throw new BusinessError(
+      a.blockedUntil && a.blockedUntil > now(db)
+        ? `Podrás volver a solicitar crédito desde el ${new Date(a.blockedUntil).toLocaleDateString("es-CO", { day: "numeric", month: "long", year: "numeric" })}.`
+        : a.historyLevel || a.scoreLevel
+          ? "Tienes cuotas con más de 30 días de atraso. Ponte al día para volver a pedir crédito."
+          : "Tu estudio de crédito no fue aprobado todavía",
+    );
   if (db.loans.some((l) => l.cedula === cedula && l.status !== "pagado" && l.status !== "cancelado"))
     throw new BusinessError("Ya tienes un crédito vigente o en espera");
   const cfg = LEVELS[level];
@@ -369,6 +377,10 @@ export function requestLoan(
   const firstPayment = buildSchedule(amount, cfg.rateEA, installments, now(db))[0].payment;
   if (a.maxInstallment && firstPayment > a.maxInstallment)
     throw new BusinessError(`La cuota (${cop(firstPayment)}) supera lo que puedes pagar cada ${INSTALLMENT_DAYS} días (${cop(a.maxInstallment)}). Elige más cuotas o un monto menor.`);
+
+  // Crédito productivo: destino y aceptación del contrato y el pagaré (simulados)
+  if (!CREDIT_PURPOSES.some((p) => p.id === contract.purpose)) throw new BusinessError("Cuéntanos para qué vas a usar el crédito.");
+  if (!contract.termsAccepted) throw new BusinessError("Debes aceptar el contrato y el pagaré para solicitar el crédito.");
 
   // Llave Bre-B: verificada, vigente, del mismo solicitante, sin usar y con el titular confirmado
   const v = db.brebVerifications.find((x) => x.id === verificationId);
@@ -399,6 +411,8 @@ export function requestLoan(
     schedule: buildSchedule(amount, cfg.rateEA, installments, now(db)),
     status: "en_espera",
     createdAt: now(db),
+    purpose: contract.purpose,
+    termsAcceptedAt: now(db),
   };
   advance(db, loan, "CREDIT_APPROVED", a.evaluatedAt);
   advance(db, loan, "BREB_KEY_VERIFIED");
@@ -418,7 +432,8 @@ function fundWaitingLoans(db: DB, level: Level) {
     if (loan.level !== level || loan.status !== "en_espera") continue;
     // Sin llave verificada y beneficiario confirmado no se debita la tesorería ni se crea el payout
     if (loan.disbursement?.state !== "USER_CONFIRMED_BENEFICIARY") continue;
-    if (pool.liquidity < loan.amount) break; // respeta el orden de la fila
+    // Encaje: el 15 % del pool (disponible + prestado) no se presta, queda para los retiros. Respeta el orden de la fila
+    if (pool.liquidity - loan.amount < INVESTOR_ECONOMICS.reserveRequirement * (pool.liquidity + pool.lent)) break;
     pool.liquidity -= loan.amount;
     pool.lent += loan.amount;
     advance(db, loan, "TREASURY_DEBITED");
@@ -516,9 +531,8 @@ export function receiveBrebPayment(db: DB, loanId: string, opts: { toKey: string
 
   if (loan.schedule.every((i) => i.paidAt)) {
     loan.status = "pagado";
-    const onTime = loan.schedule.every((i) => (i.paidAt ?? 0) <= i.dueAt);
-    const a = db.applicants.find((x) => x.cedula === loan.cedula);
-    if (onTime && a) a.paidOnTime += 1;
+    // Nivel del siguiente crédito según el peor atraso de este (docs/reglas-cambio-de-nivel.md)
+    closeLoanHistory(db, loan, t);
   }
   fundWaitingLoans(db, loan.level);
   return { loan, receipt: { txId, reference, at: t, amount, applied, toKey: VAULT_BREB.key, fromKey: opts.fromKey } };
@@ -526,13 +540,34 @@ export function receiveBrebPayment(db: DB, loanId: string, opts: { toKey: string
 
 export function loanView(db: DB, loan: Loan) {
   const t = now(db);
-  const overdue = loan.status === "activo" && loan.schedule.some((i) => !i.paidAt && i.dueAt < t);
+  const active = loan.status === "activo";
+  // En mora: alguna cuota sin pagar pasó los 3 días de la solicitud de pago. Atraso contado desde el vencimiento
+  const overdue = active && loan.schedule.some((i) => installmentState(i, t) === "EN_MORA");
   const next = loan.schedule.find((i) => !i.paidAt);
-  const daysLate = overdue && next ? Math.floor((t - next.dueAt) / DAY_MS) : 0;
+  const daysLate = active ? currentArrears(loan, t) : 0;
+  // Solicitud de pago (simulada): la cuota impaga más antigua que ya venció, con su plazo de 3 días
+  const requested = active ? loan.schedule.find((i) => !i.paidAt && i.dueAt <= t) : undefined;
+  const paymentRequest = requested
+    ? { n: requested.n, amount: installmentDue(requested), deadline: payDeadline(requested), state: installmentState(requested, t), daysLate: daysLate }
+    : null;
+  const schedule = loan.schedule.map((i) => ({ ...i, state: installmentState(i, t), daysLate: i.paidAt || i.dueAt <= t ? lateDays(i, t) : 0, deadline: payDeadline(i) }));
   /** Días que faltan para la próxima cuota (negativo si ya venció) */
   const daysToNext = loan.status === "activo" && next ? Math.ceil((next.dueAt - t) / DAY_MS) : null;
   const owed = loan.schedule.reduce((s, i) => s + installmentDue(i), 0);
   // Movimiento del desembolso, para su comprobante en PDF (los anteriores se reconocen por el id del payout)
   const disbursementTxId = db.txs.find((x) => x.kind === "desembolso_breb" && (x.loanId === loan.id || (loan.payout && x.detail.includes(loan.payout.id))))?.id ?? null;
-  return { ...loan, disbursementTxId, now: t, overdue, daysLate, daysToNext, nextInstallment: next ?? null, nextDue: next ? installmentDue(next) : 0, owed };
+  return {
+    ...loan,
+    schedule,
+    disbursementTxId,
+    now: t,
+    overdue,
+    daysLate,
+    daysToNext,
+    nextInstallment: next ?? null,
+    nextDue: next ? installmentDue(next) : 0,
+    owed,
+    paymentRequest,
+    levelOutlook: loan.status === "activo" || loan.status === "pagado" ? levelOutlook(db, loan) : null,
+  };
 }

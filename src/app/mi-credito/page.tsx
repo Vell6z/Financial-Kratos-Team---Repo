@@ -31,7 +31,7 @@ interface LoanView {
     request: unknown;
     submittedAt: number;
   };
-  schedule: Installment[];
+  schedule: (Installment & { state: InstallmentState; daysLate: number; deadline: number })[];
   overdue: boolean;
   daysLate: number;
   daysToNext: number | null;
@@ -43,7 +43,31 @@ interface LoanView {
   disbursedAt?: number;
   /** Para el comprobante del desembolso en PDF */
   disbursementTxId: string | null;
+  /** Solicitud de pago (simulada) de la cuota impaga más antigua que ya venció */
+  paymentRequest: { n: number; amount: number; deadline: number; state: InstallmentState; daysLate: number } | null;
+  /** Nivel del siguiente crédito según el peor atraso (docs/reglas-cambio-de-nivel.md) */
+  levelOutlook: { worstDelay: number; from: Level; to: Level | 4; blockedUntil: number | null; closed: boolean } | null;
+  chargedOffAt?: number;
+  creditReport?: {
+    noticeAt: number;
+    reportedAt?: number;
+    status: "aviso" | "al_dia" | "en_mora" | "pagada";
+    snapshot?: {
+      holderName: string;
+      documentType: string;
+      documentNumber: string;
+      obligationId: string;
+      obligationType: string;
+      disbursedAt: number;
+      amount: number;
+      overdueBalance: number;
+      daysLate: number;
+    };
+    paidAt?: number;
+  };
 }
+
+type InstallmentState = "PENDIENTE" | "POR_PAGAR" | "PAGADA" | "EN_MORA" | "PAGADA_CON_MORA";
 
 interface Receipt {
   txId: string;
@@ -56,7 +80,7 @@ interface Receipt {
 }
 
 interface Data {
-  applicant: { name: string; score: number; level: Level | null; paidOnTime: number } | null;
+  applicant: { name: string; score: number; level: Level | null; paidOnTime: number; blockedUntil?: number; historyLevel?: Level; scoreLevel: Level | null } | null;
   loans: LoanView[];
 }
 
@@ -86,8 +110,8 @@ export default function MyCreditPage() {
           <div className="col-span-2 sm:col-span-1">
             <Stat label="Titular" value={data.applicant.name} />
           </div>
-          <Stat label="Nivel actual" value={data.applicant.level ? LEVELS[data.applicant.level].name : "No aprobado"} sub={`Puntaje ${data.applicant.score}/100`} />
-          <Stat label="Pagados a tiempo" value={data.applicant.paidOnTime} sub="Cada uno te sube un nivel" />
+          <Stat label="Nivel actual" value={levelLabel(data)} sub={data.applicant.historyLevel ? "Según tu historial de pagos" : `Puntaje ${data.applicant.score}/100`} />
+          <Stat label="Créditos pagados a tiempo" value={data.applicant.paidOnTime} sub="Pagar a tiempo te sube un nivel" />
         </Card>
       )}
 
@@ -126,6 +150,10 @@ export default function MyCreditPage() {
 
           <LoanNotice loan={loan} />
 
+          <CreditReportCard loan={loan} />
+
+          <LevelOutlook loan={loan} />
+
           {loan.payout && <PayoutReceipt payout={loan.payout} txId={loan.disbursementTxId} />}
 
           {(loan.status === "activo" || loan.status === "pagado") && (
@@ -146,19 +174,14 @@ export default function MyCreditPage() {
                     <tr key={i.n} className="border-t border-line">
                       <td className="py-2 text-muted">{i.n}</td>
                       <td className="whitespace-nowrap">{fmtShort(i.dueAt)}</td>
-                      <td className="text-right">{cop(i.payment)}</td>
+                      <td className="text-right">
+                        {cop(i.payment)}
+                        {!i.paidAt && (i.paidAmount ?? 0) > 0 && <div className="text-[11px] text-muted">abonado {cop(i.paidAmount!)}</div>}
+                      </td>
                       <td className="hidden text-right sm:table-cell">{cop(i.interest)}</td>
                       <td className="hidden text-right sm:table-cell">{cop(i.principal)}</td>
                       <td className="text-right">
-                        {i.paidAt ? (
-                          <Badge tone={i.paidAt <= i.dueAt ? "good" : "warn"}>{i.paidAt <= i.dueAt ? "Pagada" : "Pagada tarde"}</Badge>
-                        ) : (i.paidAmount ?? 0) > 0 ? (
-                          <Badge tone={i.dueAt < loan.now ? "bad" : "neutral"}>Abonado {cop(i.paidAmount!)}</Badge>
-                        ) : i.dueAt < loan.now ? (
-                          <Badge tone="bad">Vencida</Badge>
-                        ) : (
-                          <Badge>Pendiente</Badge>
-                        )}
+                        <InstallmentBadge i={i} />
                       </td>
                     </tr>
                   ))}
@@ -167,7 +190,9 @@ export default function MyCreditPage() {
             </div>
           )}
 
-          {loan.status === "activo" && loan.nextInstallment && (
+          {loan.status === "activo" && loan.paymentRequest && <PaymentRequest loan={loan} onPay={() => setPaying(loan)} />}
+
+          {loan.status === "activo" && loan.nextInstallment && !loan.paymentRequest && (
             <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line pt-4">
               <div className="text-sm">
                 <div className="text-muted">Próxima cuota · {fmtDate(loan.nextInstallment.dueAt)}</div>
@@ -176,8 +201,8 @@ export default function MyCreditPage() {
                   <div className="text-xs text-muted">Ya abonaste {cop(loan.nextInstallment.paidAmount!)} de {cop(loan.nextInstallment.payment)}</div>
                 )}
               </div>
-              <Button onClick={() => setPaying(loan)} variant={loan.overdue ? "danger" : "primary"} className="w-full sm:w-auto">
-                {loan.overdue ? "Pagar por Bre-B (vencida)" : "Pagar o abonar por Bre-B"}
+              <Button onClick={() => setPaying(loan)} variant="ghost" className="w-full sm:w-auto">
+                Pagar o abonar por Bre-B
               </Button>
             </div>
           )}
@@ -227,16 +252,16 @@ function LoanNotice({ loan }: { loan: LoanView }) {
         Lo desembolsamos a tu llave Bre-B en cuanto haya capital disponible en el pool. No tienes que hacer nada.
       </Alert>
     );
-  if (loan.overdue && loan.nextInstallment)
+  if (loan.chargedOffAt && loan.status === "activo")
     return (
-      <Alert tone="error" title={`Cuota vencida hace ${loan.daysLate} ${loan.daysLate === 1 ? "día" : "días"}`}>
-        Paga {cop(loan.nextDue)} cuanto antes: los atrasos te impiden subir de nivel.
+      <Alert tone="error" title="Crédito castigado">
+        Llegó a {loan.daysLate} días de mora. Aún puedes pagarlo: tu reporte se actualiza a obligación pagada.
       </Alert>
     );
-  if (loan.daysToNext !== null && loan.daysToNext <= 3 && loan.nextInstallment)
+  if (!loan.paymentRequest && loan.daysToNext !== null && loan.daysToNext <= 2 && loan.nextInstallment)
     return (
-      <Alert tone="warning" title={loan.daysToNext <= 0 ? "Tu cuota vence hoy" : `Tu cuota vence en ${loan.daysToNext} ${loan.daysToNext === 1 ? "día" : "días"}`}>
-        {cop(loan.nextDue)} el {fmtDate(loan.nextInstallment.dueAt)}. Pagar a tiempo te sube de nivel.
+      <Alert tone="info" title={`Tu cuota vence el ${ddmm(loan.nextInstallment.dueAt)}`}>
+        Tu cuota de {cop(loan.nextDue)} vence el {fmtDate(loan.nextInstallment.dueAt)}. Ese día te llega la solicitud de pago.
       </Alert>
     );
   if (loan.status === "pagado")
@@ -269,8 +294,158 @@ function StatusBadge({ loan }: { loan: LoanView }) {
   if (loan.status === "pagado") return <Badge tone="good">Pagado</Badge>;
   if (loan.status === "cancelado") return <Badge tone="bad">Desembolso bloqueado</Badge>;
   if (loan.status === "en_espera") return <Badge tone="warn">{loan.disbursement?.state === "TREASURY_DEBITED" ? "Desembolsando" : "En espera de fondeo"}</Badge>;
+  if (loan.chargedOffAt) return <Badge tone="bad">Castigado · {loan.daysLate} días de mora</Badge>;
   if (loan.overdue) return <Badge tone="bad">En mora · {loan.daysLate} días</Badge>;
+  if (loan.paymentRequest) return <Badge tone="warn">Cuota por pagar</Badge>;
   return <Badge>Al día · desembolsado a {loan.llaveBreb}{loan.breb ? ` (${bankName(loan.breb.financialEntity.name)})` : ""}</Badge>;
+}
+
+const ddmm = (ms: number) => new Date(ms).toLocaleDateString("es-CO", { day: "2-digit", month: "2-digit" });
+
+function InstallmentBadge({ i }: { i: LoanView["schedule"][number] }) {
+  const badge = (tone: "neutral" | "good" | "warn" | "bad", text: string) => (
+    <span className="whitespace-nowrap">
+      <Badge tone={tone}>{text}</Badge>
+    </span>
+  );
+  switch (i.state) {
+    case "PAGADA":
+      return badge("good", "A tiempo");
+    case "PAGADA_CON_MORA":
+      return badge("warn", `Pagada · ${i.daysLate} d tarde`);
+    case "POR_PAGAR":
+      return badge("warn", `Pagar antes del ${ddmm(i.deadline)}`);
+    case "EN_MORA":
+      return badge("bad", `Mora · ${i.daysLate} d`);
+    default:
+      return badge("neutral", "Pendiente");
+  }
+}
+
+/** Nivel actual: con mora de más de 30 días o bloqueado es nivel 4 */
+function levelLabel(data: Data) {
+  const a = data.applicant!;
+  if (a.level) return LEVELS[a.level].name;
+  // Fecha de la demo (el operador puede adelantar el reloj)
+  const t = data.loans[0]?.now ?? Date.now();
+  if (a.blockedUntil && a.blockedUntil > t) return "Nivel 4 · bloqueado";
+  if (data.loans.some((l) => l.status === "activo" && l.daysLate > 30)) return "Nivel 4 · en mora";
+  return "No aprobado";
+}
+
+/** Solicitud de pago (simulada) de la cuota vencida: 3 días para pagarla sin entrar en mora */
+function PaymentRequest({ loan, onPay }: { loan: LoanView; onPay: () => void }) {
+  const r = loan.paymentRequest!;
+  const late = r.state === "EN_MORA";
+  return (
+    <div className={`space-y-3 rounded-xl border p-4 ${late ? "border-red-500/40 bg-red-500/5" : "border-amber-500/40 bg-amber-500/5"}`}>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span className="text-sm font-semibold">Solicitud de pago · cuota {r.n}</span>
+        <Badge>Pago simulado</Badge>
+      </div>
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div className="text-sm">
+          <div className="text-2xl font-semibold tabular-nums">{cop(r.amount)}</div>
+          <div className="text-muted">
+            A la llave <b className="text-foreground">{VAULT_BREB.key}</b>
+          </div>
+          <div className={late ? "font-medium text-red-600 dark:text-red-400" : "font-medium"}>
+            {late
+              ? `Tu cuota está en mora desde el ${ddmm(r.deadline + 1)} (${r.daysLate} días de atraso)`
+              : `Tienes hasta el ${ddmm(r.deadline)} para pagar`}
+          </div>
+        </div>
+        <Button onClick={onPay} variant={late ? "danger" : "primary"} className="w-full sm:w-auto">
+          Pagar por Bre-B
+        </Button>
+      </div>
+      <p className="text-[11px] text-muted">
+        Pagando dentro de los 3 días la cuota cuenta como pagada a tiempo. Puedes abonar por partes; el atraso se cuenta desde el vencimiento.
+      </p>
+    </div>
+  );
+}
+
+/** Qué pasa con su nivel (docs/reglas-cambio-de-nivel.md): mensajes claros y sin culpar */
+function LevelOutlook({ loan }: { loan: LoanView }) {
+  const o = loan.levelOutlook;
+  if (!o) return null;
+  const blocked = o.blockedUntil && o.blockedUntil > loan.now;
+  if (blocked)
+    return (
+      <Alert tone="error" title="No puedes pedir crédito por ahora">
+        Podrás volver a solicitar desde el {new Date(o.blockedUntil!).toLocaleDateString("es-CO", { day: "2-digit", month: "2-digit", year: "numeric" })}.
+      </Alert>
+    );
+  if (o.to === 4)
+    return (
+      <Alert tone="error" title="Ponte al día">
+        Tienes cuotas con más de 30 días de atraso. Ponte al día para volver a pedir crédito.
+      </Alert>
+    );
+  const name = LEVELS[o.to as Level].name.toLowerCase();
+  if (o.to < o.from)
+    return (
+      <Alert tone="success" title={o.closed ? `Tu próximo crédito es ${name}` : "Vas pagando todo a tiempo"}>
+        {o.closed
+          ? `Pagaste todo a tiempo: tu próximo crédito será ${name}, con más cupo y mejor tasa.`
+          : `Si sigues así, tu próximo crédito será ${name}: más cupo y mejor tasa.`}
+      </Alert>
+    );
+  if (o.to === o.from)
+    return (
+      <Alert tone="info" title={`Tu próximo crédito sigue en ${name}`}>
+        {o.worstDelay > 3
+          ? `Tuviste un atraso de ${o.worstDelay} días. Tu próximo crédito sigue en ${name}. Paga todo a tiempo para subir.`
+          : `Ya estás en el mejor nivel. Sigue pagando a tiempo para mantenerlo.`}
+      </Alert>
+    );
+  return (
+    <Alert tone="warning" title={`Tu próximo crédito será ${name}`}>
+      Tuviste un atraso de {o.worstDelay} días. Tu próximo crédito será {name}.
+    </Alert>
+  );
+}
+
+/** Aviso del día 70 y reporte SIMULADO del día 90 a centrales de riesgo */
+function CreditReportCard({ loan }: { loan: LoanView }) {
+  const r = loan.creditReport;
+  if (!r || r.status === "al_dia") return null;
+  if (r.status === "aviso")
+    return (
+      <Alert tone="error" title="Aviso previo de reporte a centrales de riesgo">
+        Tienes una cuota con 70 días de atraso. Si no te pones al día en los próximos 20 días (antes del {fmtDate(r.noticeAt + 20 * 86_400_000)}), tu deuda será
+        reportada a las centrales de riesgo.
+      </Alert>
+    );
+  const s = r.snapshot;
+  return (
+    <div className="space-y-3 rounded-xl border border-red-500/40 p-4 text-sm">
+      <div className="rounded-lg bg-red-500/10 px-3 py-2 text-xs font-semibold text-red-700 dark:text-red-300">
+        SIMULACIÓN: este reporte no se envía a ninguna central de riesgo.
+      </div>
+      <div className="flex items-center justify-between gap-2">
+        <span className="font-semibold">Reporte a centrales de riesgo</span>
+        <span className="shrink-0 whitespace-nowrap">
+          <Badge tone={r.status === "pagada" ? "warn" : "bad"}>{r.status === "pagada" ? "Pagada después de mora" : "En mora"}</Badge>
+        </span>
+      </div>
+      {s && (
+        <dl className="space-y-1">
+          <ReceiptRow k="Titular" v={s.holderName} />
+          <ReceiptRow k="Documento" v={`${s.documentType} ${s.documentNumber}`} />
+          <ReceiptRow k="Obligación" v={`${s.obligationId} · ${s.obligationType}`} />
+          <ReceiptRow k="Fecha de desembolso" v={fmtDate(s.disbursedAt)} />
+          <ReceiptRow k="Monto desembolsado" v={cop(s.amount)} />
+          <ReceiptRow k="Saldo en mora" v={cop(s.overdueBalance)} />
+          <ReceiptRow k="Días de mora" v={String(s.daysLate)} />
+          <ReceiptRow k="Aviso previo" v={fmtDate(r.noticeAt)} />
+          <ReceiptRow k="Fecha del reporte" v={fmtDate(r.reportedAt!)} />
+          {r.paidAt && <ReceiptRow k="Pagada el" v={fmtDate(r.paidAt)} />}
+        </dl>
+      )}
+    </div>
+  );
 }
 
 /**

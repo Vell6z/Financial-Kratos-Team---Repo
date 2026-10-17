@@ -19,7 +19,7 @@ Una persona **sin historial crediticio** llena el estudio en 6 pasos (`/estudio`
 | **3** | Riesgo alto | Sí, un crédito de prueba para construir historial |
 | **4** | No apto por ahora | No. Recibe la razón, qué puede cambiar y la fecha para volver a solicitar |
 
-**Principio:** un formulario no verifica nada, solo recoge lo que la persona dice. Por eso lo que dice vale según **cuánto lo respalda**, el formulario solo decide un **primer crédito** limitado por su capacidad de pago, y el historial real lo construyen los pagos: cada crédito pagado a tiempo sube un nivel.
+**Principio:** un formulario no verifica nada, solo recoge lo que la persona dice. Por eso lo que dice vale según **cuánto lo respalda**, el formulario solo decide un **primer crédito** limitado por su capacidad de pago, y el historial real lo construyen los pagos: desde el segundo crédito, el nivel sale de cómo pagó el anterior (ver sección 7.1).
 
 ## 2. Recorrido
 
@@ -53,6 +53,9 @@ El estudio **no pregunta** sexo, edad exacta, etnia, estado civil, religión ni 
 | Plazo (el cliente elige) | 30 a 365 días | 30 a 150 días | 30 a 90 días |
 | Tasa efectiva anual | 24 % | 30 % | 36 % |
 | Frecuencia | Cada 15 días (mín. 2 cuotas) | Cada 15 días (mín. 2 cuotas) | Cada 15 días (mín. 2 cuotas) |
+| Rentabilidad esperada del inversionista | 15,3 % | 17,9 % | 19,6 % |
+
+La rentabilidad del inversionista (área financiera, 17-oct-2026) es 85 % prestado × (tasa del acreditado − reserva para impagos de 3, 6 o 10 puntos − comisión de la plataforma de 3 puntos). El 15 % de cada pool es encaje: no se presta. Es **esperada, no garantizada**.
 
 ## 4. Puntaje (100 puntos)
 
@@ -181,6 +184,16 @@ Con el ajuste, el nivel 1 pasa de 111 a 1.428 personas con 1,5 % de mora: las re
 - **Cuota fija** (sistema francés); la última cuota se ajusta para dejar el saldo en cero.
 - La pantalla "Pedir crédito" muestra el cupo para el plazo elegido y no deja solicitar si la cuota supera la capacidad. El servidor valida lo mismo.
 
+### 7.1 Pago de cuotas, mora y cambio de nivel
+
+Área financiera, 17-oct-2026. Reglas completas: [`reglas-cambio-de-nivel.md`](reglas-cambio-de-nivel.md). Código: `src/lib/credit-history.ts`.
+
+- El día del vencimiento se crea una **solicitud de pago** (simulada) por la cuota: tiene **3 días** para pagarla. Dentro de esos días cuenta como a tiempo.
+- Estados de cada cuota: `PENDIENTE` → `POR_PAGAR` (días 0 a 3) → `PAGADA`, o `EN_MORA` (desde el día 4) → `PAGADA_CON_MORA`. Los días de atraso se cuentan **desde el vencimiento**. Sin interés de mora.
+- Nivel del siguiente crédito según el **peor atraso** del último crédito: 0–3 días sube · 4–15 se mantiene · 16–30 baja · 31–89 nivel 4 mientras deba (luego nivel 3) · 90 o más nivel 4 y bloqueado 12 meses. Con historial, el nivel sale de esta regla y no del estudio.
+- **Día 70 de mora:** aviso previo de reporte a centrales de riesgo. **Día 90:** reporte **simulado** (no se envía a ninguna central), castigo del crédito y bloqueo de 12 meses. Si paga después, el reporte pasa a "obligación pagada" y el bloqueo se mantiene.
+- Antes de solicitar, el acreditado elige el **destino** del crédito (productivo) y acepta el contrato y el pagaré (simulados).
+
 ## 8. Perfiles de prueba (resultados del modelo en esta app)
 
 Puntaje → nivel de reglas → nivel final con ML (probabilidad de atraso).
@@ -219,6 +232,6 @@ Las diferencias de 1 a 3 puntos frente al documento del equipo vienen de las res
 - Todo lo simulado se rotula como simulado en la interfaz.
 
 **Pendientes conocidos:**
-- Las tasas de los niveles 2 y 3 superan la usura de consumo: el crédito debe presentarse como **productivo** (verificar el tope vigente en la Superfinanciera).
+- El crédito se presenta como **productivo** (pregunta de destino y contrato simulado); verificar el tope de usura vigente en la Superfinanciera antes del pitch.
 - Conectar el desembolso y el cobro de cuotas con Open Payments (hoy Bre-B simulado).
 - Confirmación real de referencias: los casos "no la conoce" (X3) y "no cumple" están descritos pero aún no se disparan; hay un gancho marcado en `computeStudy`.

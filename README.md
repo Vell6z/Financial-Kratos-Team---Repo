@@ -24,11 +24,11 @@ Inversionista ──Interledger──▶ Bóveda (cajita por nivel) ──Bre-B�
 
 ## Reglas de negocio (`src/lib/config.ts`)
 
-| Nivel | Riesgo | Tasa EA | Monto máx. | Plazo |
-|---|---|---|---|---|
-| 1 | Bajo | 24% | $5.000.000 | 30–365 días |
-| 2 | Medio | 30% | $3.000.000 | 30–150 días |
-| 3 | Alto | 36% | $1.000.000 | 30–90 días |
+| Nivel | Riesgo | Tasa del acreditado (E.A.) | Rentabilidad esperada del inversionista | Monto máx. | Plazo |
+|---|---|---|---|---|---|
+| 1 | Bajo | 24 % | 15,3 % | $5.000.000 | 30–365 días |
+| 2 | Medio | 30 % | 17,9 % | $3.000.000 | 30–150 días |
+| 3 | Alto | 36 % | 19,6 % | $1.000.000 | 30–90 días |
 
 - **Inversión tipo "cajita"**: el inversionista elige un nivel y su saldo crece con interés compuesto a la tasa del nivel.
 - **Retiros**: cada aporte dura **un año** desde que se hace, en cualquier nivel.
@@ -38,6 +38,9 @@ Inversionista ──Interledger──▶ Bóveda (cajita por nivel) ──Bre-B�
 - **Inversión recurrente**: antes de invertir se puede elegir "Repetir cada mes". En la wallet se aprueba una sola vez un
   permiso de Open Payments con intervalo (el mismo monto, en la moneda de la wallet, cada mes); cada cobro entra a la cajita
   como un aporte nuevo. Se cancela desde `/invertir` (se revoca el permiso). `OP_RECURRING_INTERVAL` cambia la frecuencia.
+- **Rentabilidad esperada del inversionista**: 15,3 % / 17,9 % / 19,6 % E.A. (no garantizada). 15 % de cada pool es encaje.
+- **Mora y nivel**: solicitud de pago con 3 días para pagar; el peor atraso decide el nivel del siguiente crédito; aviso a los 70 días
+  y reporte **simulado** a centrales de riesgo a los 90 (ver `docs/reglas-cambio-de-nivel.md` y `docs/modelo-de-riesgo.md`).
 - **Capital semilla**: 50 M COP repartidos 20 / 17 / 13 M entre los pools (supuesto).
 - **Créditos**: mínimo 2 cuotas, una cada 15 días contados desde el desembolso, con cuota fija (sistema francés). Si el pool no tiene fondos el crédito queda **en espera de fondeo** y se desembolsa cuando entra dinero.
 - **Estudio de crédito** (`/estudio`): obligatorio para el acreditado antes de usar la app. 6 pasos; el servidor calcula un puntaje 0–100 con factor de confianza (declarado ×0,5, documento ×0,8, confirmado ×1), cruces de coherencia y exclusiones, y asigna nivel 1, 2, 3 o 4 (no apto, reintento en 60 días). Explicación completa en [`docs/modelo-de-riesgo.md`](docs/modelo-de-riesgo.md).

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { currentUser } from "@/lib/auth";
-import { APP_NAME, LEVEL_IDS, LEVELS } from "@/lib/config";
+import { APP_NAME, fmtRate, LEVEL_IDS, LEVELS } from "@/lib/config";
 import { cop, pct } from "@/lib/finance";
 
 const steps = [
@@ -127,7 +127,7 @@ export default async function Home() {
           kicker="Para inversionistas"
           title="Rentabilidad con impacto, desde tu wallet"
           points={[
-            "Elige tu perfil de riesgo: más riesgo, más rendimiento.",
+            "Elige tu perfil de riesgo: más riesgo, más rentabilidad esperada (15,3 % a 19,6 % E.A.).",
             "Tu saldo crece con interés compuesto, como una cajita.",
             "Tu inversión dura un año: al cumplirlo retiras todo; antes, como máximo el 50 %. Directo a tu wallet de Interledger.",
             "Cada peso financia a una persona real en Colombia.",
@@ -154,7 +154,7 @@ export default async function Home() {
           <p className="text-sm font-medium uppercase tracking-widest text-mint">Niveles de riesgo</p>
           <h2 className="mt-2 text-3xl font-semibold">Transparente para ambos lados</h2>
           <p className="mt-2 max-w-2xl text-muted">
-            La tasa que paga el solicitante es la que renta la cajita del inversionista de ese nivel.
+            Cada nivel tiene su propio pool. De la tasa que paga el solicitante salen la reserva para impagos y la comisión de la plataforma; el resto es la rentabilidad esperada del inversionista. El 15 % de cada pool no se presta y queda para retiros.
           </p>
           <div className="mt-10 grid gap-4 md:grid-cols-3">
             {LEVEL_IDS.map((l) => {
@@ -165,8 +165,11 @@ export default async function Home() {
                     <span className="font-semibold">{c.name}</span>
                     <span className="text-xs text-muted">{c.risk}</span>
                   </div>
-                  <div className="mt-4 text-4xl font-semibold text-mint">{pct(c.rateEA)}</div>
-                  <div className="text-xs text-muted">efectivo anual</div>
+                  <div className="mt-4 text-4xl font-semibold text-mint">{fmtRate(c.investorRateEA)}</div>
+                  <div className="text-xs text-muted">rentabilidad esperada E.A. del inversionista</div>
+                  <div className="mt-2 text-sm">
+                    Solicitante paga <b>{pct(c.rateEA)} E.A.</b>
+                  </div>
                   <ul className="mt-5 space-y-2 border-t border-line pt-4 text-sm text-muted">
                     <li>Crédito hasta {cop(c.maxAmount)}</li>
                     <li>

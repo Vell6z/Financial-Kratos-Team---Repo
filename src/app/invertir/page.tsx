@@ -3,15 +3,15 @@
 import { useCallback, useEffect, useState } from "react";
 import { ConfirmDialog, useToast } from "@/components/feedback";
 import { Alert, Badge, Button, Card, Choice, EmptyState, Input, MoneyInput, PageHeader, Stat, api } from "@/components/ui";
-import { EARLY_WITHDRAWAL_SHARE, investmentTermLabel, LEVEL_IDS, LEVELS, MIN_INVESTMENT, type Level } from "@/lib/config";
-import { accrue, cop, pct } from "@/lib/finance";
+import { EARLY_WITHDRAWAL_SHARE, EXPECTED_RETURN_NOTE, fmtRate, investmentTermLabel, LEVEL_IDS, LEVELS, MIN_INVESTMENT, type Level } from "@/lib/config";
+import { accrue, cop } from "@/lib/finance";
 import { validateMoney, validateWallet, walletLabel } from "@/lib/validators";
 
 const QUICK_AMOUNTS = [100_000, 500_000, 1_000_000, 5_000_000];
 const RISK_TEXT: Record<Level, string> = {
-  1: "Créditos a perfiles con mejor historial. Menor rendimiento, menor riesgo.",
-  2: "Equilibrio entre rendimiento y riesgo de impago.",
-  3: "Mayor rendimiento a cambio de mayor riesgo de impago.",
+  1: "Créditos a perfiles con mejor historial. Menor rentabilidad esperada, menor riesgo.",
+  2: "Equilibrio entre rentabilidad esperada y riesgo de impago.",
+  3: "Mayor rentabilidad esperada a cambio de mayor riesgo de impago.",
 };
 
 interface Position {
@@ -235,7 +235,7 @@ export default function InvestPage() {
 
   const walletError = validateWallet(wallet);
   const amountError = validateMoney(amount, { min: MIN_INVESTMENT, label: "cuánto quieres invertir" });
-  const projected = Number(amount) > 0 ? accrue(Number(amount), LEVELS[level].rateEA, 365 * 86_400_000) : 0;
+  const projected = Number(amount) > 0 ? accrue(Number(amount), LEVELS[level].investorRateEA, 365 * 86_400_000) : 0;
   const total = positions.reduce((s, p) => s + p.balance, 0);
   const gains = positions.reduce((s, p) => s + p.balance - p.deposited + p.withdrawn, 0);
   const awaitingDeposit = pending?.kind === "deposit" ? pending : null;
@@ -247,7 +247,7 @@ export default function InvestPage() {
       <PageHeader
         eyebrow="Inversionista"
         title="Mis inversiones"
-        description={`Elige un nivel de riesgo: tu dinero renta a la tasa de ese nivel con interés compuesto. Cada aporte dura un año: al cumplirlo retiras todo; antes, como máximo el ${EARLY_PCT}.`}
+        description={`Elige un nivel de riesgo: tu dinero crece con interés compuesto a la rentabilidad esperada de ese nivel (no garantizada). Cada aporte dura un año: al cumplirlo retiras todo; antes, como máximo el ${EARLY_PCT}.`}
       />
 
       <Card className="grid grid-cols-2 gap-6 sm:grid-cols-3">
@@ -322,7 +322,8 @@ export default function InvestPage() {
                         <span className="font-semibold">{LEVELS[l].name}</span>
                         <span className="text-xs text-muted">{LEVELS[l].risk}</span>
                       </div>
-                      <div className="mt-1 text-2xl font-semibold text-mint">{pct(LEVELS[l].rateEA)} EA</div>
+                      <div className="mt-1 text-2xl font-semibold text-mint">{fmtRate(LEVELS[l].investorRateEA)} E.A.</div>
+                      <div className="text-[11px] text-muted">rentabilidad esperada</div>
                       <div className="text-xs font-medium">Plazo {investmentTermLabel(l)}</div>
                       <p className="mt-1 text-xs text-muted">{RISK_TEXT[l]}</p>
                     </button>
@@ -412,7 +413,7 @@ export default function InvestPage() {
                 <h3 className="font-semibold">Resumen</h3>
                 <dl className="space-y-2 text-sm">
                   <SummaryRow k="Desde" v={wallet && !walletError ? walletLabel(asUrl(wallet)) : "—"} />
-                  <SummaryRow k="Cajita" v={`${LEVELS[level].name} · ${pct(LEVELS[level].rateEA)} EA`} />
+                  <SummaryRow k="Cajita" v={`${LEVELS[level].name} · ${fmtRate(LEVELS[level].investorRateEA)} E.A. esperada`} />
                   <SummaryRow k="Plazo" v={investmentTermLabel(level)} />
                   <SummaryRow k="Monto" v={Number(amount) > 0 ? cop(Number(amount)) : "—"} />
                   <SummaryRow k="Frecuencia" v={frequency === "recurring" ? capitalize(recurringLabel) : "Una sola vez"} />
@@ -427,10 +428,10 @@ export default function InvestPage() {
                 )}
                 {projected > 0 && !amountError && (
                   <div className="rounded-lg bg-brand-soft p-4">
-                    <div className="text-xs text-muted">En un año tendrías aprox.</div>
+                    <div className="text-xs text-muted">Si se cumple la rentabilidad esperada, en un año tendrías aprox.</div>
                     <div className="text-2xl font-semibold tabular-nums">{cop(projected)}</div>
                     <div className="text-xs text-mint">+{cop(projected - Number(amount))}</div>
-                    <div className="mt-1 text-[11px] text-muted">Proyección sin impagos; el riesgo lo asume el inversionista.</div>
+                    <div className="mt-1 text-[11px] text-muted">{EXPECTED_RETURN_NOTE}</div>
                   </div>
                 )}
                 <p className="text-[11px] text-muted">
@@ -712,7 +713,7 @@ function PositionCard({
     <Card className="space-y-4">
       <div className="flex items-center justify-between">
         <span className="font-semibold">{LEVELS[p.level].name}</span>
-        <Badge>{pct(LEVELS[p.level].rateEA)} EA</Badge>
+        <Badge>{fmtRate(LEVELS[p.level].investorRateEA)} E.A. esperada</Badge>
       </div>
       <div>
         <div className="text-2xl font-semibold tabular-nums">{cop(p.balance)}</div>
