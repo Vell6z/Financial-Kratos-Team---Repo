@@ -92,3 +92,5 @@ next-env.d.ts
 
 # === Claude Code: configuración personal de cada quien (launch.json sí se comparte) ===
 .claude/settings.local.json
+
+certificates
