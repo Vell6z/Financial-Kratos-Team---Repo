@@ -160,9 +160,9 @@ Tasas de incumplimiento resultantes:
 |---|---|---|
 | `grupo` | aprobado / piloto / rechazado | |
 | `nivel_credito`, `tasa_ea` | | Nivel y tasa con que se prestó |
-| `monto`, `cuotas`, `plazo_dias`, `valor_cuota` | | Cuotas quincenales, sistema francés |
+| `monto`, `cuotas`, `plazo_dias`, `valor_cuota` | | Cuotas cada 15 días, sistema francés |
 | `total_a_pagar` | COP | Cuota × número de cuotas |
-| `cuota_sobre_disponible` | número | Cuota quincenal ÷ la mitad del disponible declarado |
+| `cuota_sobre_disponible` | número | Cuota (cada 15 días) ÷ la mitad del disponible declarado |
 
 **Resultado: no usar como variable de entrada** (se conoce después de prestar)
 

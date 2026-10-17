@@ -4,7 +4,7 @@ Explicación sencilla de cómo el estudio de crédito decide el nivel de riesgo 
 
 **Fuente de verdad:** [`src/lib/scoring.ts`](../src/lib/scoring.ts). Los parámetros están en `CONFIG`, al inicio del archivo. Si cambian la lógica, actualicen este documento y el README.
 
-> Este modelo sigue el documento de lógica del equipo, con tres decisiones propias de esta app: **cuotas quincenales**, el **techo del nivel 2 en $3.000.000** y el **plazo del nivel 3 de 15 a 60 días** (con cuotas quincenales el mínimo de 15 días sí funciona).
+> Este modelo sigue el documento de lógica del equipo, con tres decisiones propias de esta app: **cuotas cada 15 días** (mínimo 2 cuotas, contadas desde el desembolso), el **techo del nivel 2 en $3.000.000** y el **plazo del nivel 3 de 30 a 60 días**.
 
 ---
 
@@ -50,9 +50,9 @@ El estudio **no pregunta** sexo, edad exacta, etnia, estado civil, religión ni 
 | | Nivel 1 | Nivel 2 | Nivel 3 |
 |---|---|---|---|
 | Techo del monto | $5.000.000 | $3.000.000 | $1.000.000 |
-| Plazo (el cliente elige) | 30 a 120 días | 30 a 90 días | 15 a 60 días |
+| Plazo (el cliente elige) | 30 a 120 días | 30 a 90 días | 30 a 60 días |
 | Tasa efectiva anual | 24 % | 30 % | 36 % |
-| Frecuencia | Quincenal | Quincenal | Quincenal |
+| Frecuencia | Cada 15 días (mín. 2 cuotas) | Cada 15 días (mín. 2 cuotas) | Cada 15 días (mín. 2 cuotas) |
 
 ## 4. Puntaje (100 puntos)
 
@@ -173,9 +173,9 @@ Con el ajuste, el nivel 1 pasa de 111 a 1.574 personas con 1,3 % de mora: las re
 
 **Recomendaciones (niveles 1 a 3):** subir la factura · subir la libreta o pedir confirmación de la natillera · pedir a las referencias que confirmen · en niveles 2 y 3, "paga tu crédito a tiempo y subes un nivel".
 
-## 7. Cuánto se presta (cuotas quincenales)
+## 7. Cuánto se presta (cuotas cada 15 días)
 
-- **Cuota máxima por quincena** = disponible mensual ÷ 30 × 50 % × 15 días.
+- **Cuota máxima cada 15 días** = disponible mensual ÷ 30 × 50 % × 15 días.
 - **Tasa del periodo:** i = (1 + E.A.)^(15 ÷ 365) − 1.
 - **Cupo** = el menor entre el techo del nivel y el valor presente de la cuota máxima en el número de cuotas elegido, redondeado hacia abajo a miles: cuota máx × (1 − (1 + i)^(−n)) ÷ i.
 - **Cuota fija** (sistema francés); la última cuota se ajusta para dejar el saldo en cero.

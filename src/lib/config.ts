@@ -20,7 +20,7 @@ export interface LevelConfig {
 export const LEVELS: Record<Level, LevelConfig> = {
   1: { name: "Nivel 1", risk: "Riesgo bajo", rateEA: 0.24, maxAmount: 5_000_000, minDays: 30, maxDays: 120, seed: 20_000_000 },
   2: { name: "Nivel 2", risk: "Riesgo medio", rateEA: 0.3, maxAmount: 3_000_000, minDays: 30, maxDays: 90, seed: 17_000_000 },
-  3: { name: "Nivel 3", risk: "Riesgo alto", rateEA: 0.36, maxAmount: 1_000_000, minDays: 15, maxDays: 60, seed: 13_000_000 },
+  3: { name: "Nivel 3", risk: "Riesgo alto", rateEA: 0.36, maxAmount: 1_000_000, minDays: 30, maxDays: 60, seed: 13_000_000 },
 };
 
 /** Capital semilla total (supuesto: 50 millones COP repartidos entre los pools) */
@@ -53,7 +53,10 @@ export const VAULT_BREB = {
 /** Abono mínimo por Bre-B, en pesos */
 export const MIN_PAYMENT = 1_000;
 
-/** Cuotas quincenales */
+/** Mínimo de cuotas por crédito */
+export const MIN_INSTALLMENTS = 2;
+
+/** Las cuotas se pagan cada 15 días, contados desde el desembolso (no por quincenas del calendario) */
 export const INSTALLMENT_DAYS = 15;
 
 /** Pendientes de definir por el equipo: comisión operativa, seguro contra impago y reserva. */

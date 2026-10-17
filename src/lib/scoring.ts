@@ -302,7 +302,7 @@ export interface StudyResult {
   breakdown: { key: string; label: string; points: number; max: number }[];
   /** % de los puntos de afirmaciones respaldados por un documento o un tercero */
   backing: number;
-  /** Cuota quincenal máxima que puede asumir */
+  /** Cuota máxima (cada 15 días) que puede asumir */
   maxInstallment: number;
   alerts: string[];
   /** Con 1 alerta el perfil queda marcado para revisión, sin cambiar el nivel */
@@ -431,7 +431,7 @@ export function computeStudy(a: StudyAnswers, ctx: StudyContext): StudyResult {
   if (ctx.hasUnpaidLoan) exclusions.push("Tienes un crédito con nosotros con cuotas vencidas sin pagar.");
   if (exclusions.length) riskLevel = 4;
 
-  // Cuota máxima por quincena: 50 % del disponible diario × 15 días
+  // Cuota máxima cada 15 días: 50 % del disponible diario × 15 días
   const maxInstallment = Math.max(0, Math.floor(((free / 30) * CONFIG.maxInstallmentShare) * INSTALLMENT_DAYS));
 
   // Si ni el crédito mínimo al plazo más largo cabe en su capacidad, no es apto por ahora
@@ -440,7 +440,7 @@ export function computeStudy(a: StudyAnswers, ctx: StudyContext): StudyResult {
     const smallest = buildSchedule(MIN_LOAN, cfg.rateEA, Math.floor(cfg.maxDays / INSTALLMENT_DAYS), 0)[0].payment;
     if (maxInstallment < smallest) {
       riskLevel = 4;
-      exclusions.push("Lo que te queda libre cada quincena no alcanza para la cuota del crédito más pequeño.");
+      exclusions.push("Lo que te queda libre cada 15 días no alcanza para la cuota del crédito más pequeño.");
     }
   }
 

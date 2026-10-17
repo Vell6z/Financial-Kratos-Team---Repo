@@ -7,7 +7,7 @@ import { BrebQrScanner } from "@/components/breb-qr-scanner";
 import { ConfirmDialog, useToast } from "@/components/feedback";
 import { Alert, Badge, Button, Card, Input, MoneyInput, PageHeader, Spinner, api } from "@/components/ui";
 import { bankName, BREB_KEY_TYPE_IDS, BREB_KEY_TYPES, SANDBOX_KEYS, brebKeyFormatError, detectBrebKeyType, normalizeBrebKey, type BrebKeyType } from "@/lib/breb-keys";
-import { INSTALLMENT_DAYS, LEVELS, MIN_LOAN, type Level } from "@/lib/config";
+import { INSTALLMENT_DAYS, LEVELS, MIN_INSTALLMENTS, MIN_LOAN, type Level } from "@/lib/config";
 import { buildSchedule, cop, pct } from "@/lib/finance";
 import { creditLimit } from "@/lib/scoring";
 import { validateMoney } from "@/lib/validators";
@@ -99,7 +99,7 @@ export default function CreditPage() {
 
 function LoanOffer({ evaluation, defaultLlave, onDone }: { evaluation: Evaluation; defaultLlave: string; onDone: () => void }) {
   const cfg = LEVELS[evaluation.level!];
-  const minN = Math.ceil(cfg.minDays / INSTALLMENT_DAYS);
+  const minN = Math.max(MIN_INSTALLMENTS, Math.ceil(cfg.minDays / INSTALLMENT_DAYS));
   const maxN = Math.floor(cfg.maxDays / INSTALLMENT_DAYS);
   // Arranca con el plazo más corto cuyo cupo permite el crédito mínimo, y un monto que quepa en ese cupo
   const [initial] = useState(() => {
@@ -238,7 +238,7 @@ function LoanOffer({ evaluation, defaultLlave, onDone }: { evaluation: Evaluatio
           </div>
 
           <div className="text-sm">
-            <span className="mb-2 block font-medium">¿En cuántas cuotas quincenales?</span>
+            <span className="mb-2 block font-medium">¿En cuántas cuotas? (una cada 15 días, mínimo 2)</span>
             <div className="grid grid-cols-4 gap-2 sm:flex sm:flex-wrap" role="radiogroup" aria-label="Número de cuotas">
               {Array.from({ length: maxN - minN + 1 }, (_, i) => minN + i).map((k) => (
                 <button
@@ -317,13 +317,13 @@ function LoanOffer({ evaluation, defaultLlave, onDone }: { evaluation: Evaluatio
           <h2 className="font-semibold">Resumen</h2>
           <dl className="space-y-2 text-sm">
             <SummaryRow k="Monto" v={cop(value)} />
-            <SummaryRow k="Cuotas" v={`${n} quincenales`} />
+            <SummaryRow k="Cuotas" v={`${n} · cada 15 días`} />
             <SummaryRow k="Tasa" v={`${pct(cfg.rateEA)} EA`} />
             <SummaryRow k="Intereses" v={cop(Math.max(0, total - value))} />
-            <SummaryRow k="Tu máximo por quincena" v={cop(evaluation.maxInstallment)} />
+            <SummaryRow k="Tu máximo por cuota" v={cop(evaluation.maxInstallment)} />
           </dl>
           <div className={`rounded-lg p-4 ${tooHigh ? "bg-red-500/10" : "bg-brand-soft"}`}>
-            <div className="text-xs text-muted">Cuota quincenal</div>
+            <div className="text-xs text-muted">Cuota cada 15 días</div>
             <div className="text-2xl font-semibold tabular-nums">{cop(schedule[0].payment)}</div>
             <div className="text-xs text-muted">Total a pagar {cop(total)}</div>
           </div>

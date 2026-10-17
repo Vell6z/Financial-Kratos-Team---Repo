@@ -106,7 +106,7 @@ export default function MyCreditPage() {
             <div>
               <div className="text-lg font-semibold">{cop(loan.amount)}</div>
               <div className="text-sm text-muted">
-                {LEVELS[loan.level].name} · {pct(loan.rateEA)} EA · {loan.installments} cuotas quincenales
+                {LEVELS[loan.level].name} · {pct(loan.rateEA)} EA · {loan.installments} cuotas, una cada 15 días
               </div>
             </div>
             <StatusBadge loan={loan} />

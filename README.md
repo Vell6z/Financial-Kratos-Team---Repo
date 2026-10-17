@@ -6,7 +6,7 @@ bancarizadas. El dinero se desembolsa y se recauda en pesos por **Bre-B**, y cad
 ```
 Inversionista ──Interledger──▶ Bóveda (cajita por nivel) ──Bre-B──▶ Crédito al solicitante
       ▲                                                                   │
-      └──── retiro capital + rendimiento (Interledger) ◀── cuotas quincenales por Bre-B
+      └──── retiro capital + rendimiento (Interledger) ◀── cuotas cada 15 días por Bre-B
 ```
 
 ## Qué es real y qué es simulado
@@ -28,7 +28,7 @@ Inversionista ──Interledger──▶ Bóveda (cajita por nivel) ──Bre-B�
 |---|---|---|---|---|
 | 1 | Bajo | 24% | $5.000.000 | 30–120 días |
 | 2 | Medio | 30% | $3.000.000 | 30–90 días |
-| 3 | Alto | 36% | $1.000.000 | 15–60 días |
+| 3 | Alto | 36% | $1.000.000 | 30–60 días |
 
 - **Inversión tipo "cajita"**: el inversionista elige un nivel y su saldo crece con interés compuesto a la tasa del nivel.
 - **Retiros**: cada aporte tiene su propio plazo según el nivel (120, 90 o 60 días, el plazo máximo de los créditos de ese nivel).
@@ -36,10 +36,10 @@ Inversionista ──Interledger──▶ Bóveda (cajita por nivel) ──Bre-B�
   que ya sacó de él). Los retiros salen primero de los aportes vencidos, del más antiguo al más nuevo.
   Máximo **US$30.000 por retiro**, pasado a pesos con la tasa de mercado del dólar. Siempre sujeto a la liquidez del pool.
 - **Capital semilla**: 50 M COP repartidos 20 / 17 / 13 M entre los pools (supuesto).
-- **Créditos**: cuotas quincenales con cuota fija (sistema francés). Si el pool no tiene fondos el crédito queda **en espera de fondeo** y se desembolsa cuando entra dinero.
+- **Créditos**: mínimo 2 cuotas, una cada 15 días contados desde el desembolso, con cuota fija (sistema francés). Si el pool no tiene fondos el crédito queda **en espera de fondeo** y se desembolsa cuando entra dinero.
 - **Estudio de crédito** (`/estudio`): obligatorio para el acreditado antes de usar la app. 6 pasos; el servidor calcula un puntaje 0–100 con factor de confianza (declarado ×0,5, documento ×0,8, confirmado ×1), cruces de coherencia y exclusiones, y asigna nivel 1, 2, 3 o 4 (no apto, reintento en 60 días). Explicación completa en [`docs/modelo-de-riesgo.md`](docs/modelo-de-riesgo.md).
 - **Machine Learning** (`ml/`): dataset sintético de 6.000 solicitudes con su historial de pago y un modelo base que compara ML vs. el cuestionario. Ver [`ml/README.md`](ml/README.md).
-- **Cupo**: el menor entre el techo del nivel y lo que alcanza a pagar con una cuota quincenal de máximo el 50 % de su dinero libre.
+- **Cupo**: el menor entre el techo del nivel y lo que alcanza a pagar con una cuota cada 15 días de máximo el 50 % de su dinero libre.
 - **Subir de nivel**: cada crédito pagado completo y sin atrasos sube un nivel.
 - **Pendiente de definir**: comisión operativa, seguro contra impago y reserva (`FEES`, hoy en 0).
 

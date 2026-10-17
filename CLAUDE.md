@@ -30,7 +30,7 @@ python3 ml/train_baseline.py   # entrena el modelo base y escribe ml/modelo/regr
 
 **Reglas y dominio (`src/lib/`)**
 - `config.ts` — reglas de negocio: niveles, tasas, techos, plazos, capital semilla, plazo y tope de retiros, llave Bre-B de la bóveda (`VAULT_BREB`). **Las reglas se cambian aquí.**
-- `finance.ts` — tasa por periodo, interés compuesto, tabla de amortización francesa (cuotas quincenales), formato COP.
+- `finance.ts` — tasa por periodo, interés compuesto, tabla de amortización francesa (una cuota cada 15 días), formato COP.
 - `db.ts` — tipos de la base y `withDB` / `readDB` / `now(db)`. `now(db)` es el reloj de la demo (el operador lo puede adelantar).
 - `services.ts` — lógica de negocio del servidor:
   - cajitas y aportes (`creditDeposit`, `withdrawable`, `debitWithdraw`, `refundWithdraw`);
@@ -73,11 +73,11 @@ python3 ml/train_baseline.py   # entrena el modelo base y escribe ml/modelo/regr
 |---|---|---|---|---|
 | 1 (riesgo bajo) | 24 % | $5.000.000 | 30–120 días | 120 días |
 | 2 (riesgo medio) | 30 % | $3.000.000 | 30–90 días | 90 días |
-| 3 (riesgo alto) | 36 % | $1.000.000 | 15–60 días | 60 días |
+| 3 (riesgo alto) | 36 % | $1.000.000 | 30–60 días | 60 días |
 
 **Crédito**
-- Cuotas **quincenales**, sistema francés.
-- Cupo = el menor entre el techo del nivel y el valor presente de la cuota máxima (50 % de lo que le sobra por quincena).
+- Mínimo **2 cuotas**, una **cada 15 días** contados desde el desembolso (no por quincenas del calendario), sistema francés. `MIN_INSTALLMENTS` en `config.ts`.
+- Cupo = el menor entre el techo del nivel y el valor presente de la cuota máxima (50 % de lo que le sobra cada 15 días).
 - Si el pool no tiene capital, el crédito queda **en espera de fondeo**.
 
 **Inversión y retiros**

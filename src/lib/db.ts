@@ -64,7 +64,7 @@ export interface Applicant {
   scoreLevel: Level | null;
   recommendations: string[];
   breakdown: StudyResult["breakdown"];
-  /** Cuota quincenal máxima según su capacidad de pago */
+  /** Cuota máxima (cada 15 días) según su capacidad de pago */
   maxInstallment: number;
   /** Nivel del modelo de riesgo: 1 a 3 reciben crédito, 4 = no apto por ahora */
   riskLevel: StudyResult["riskLevel"];

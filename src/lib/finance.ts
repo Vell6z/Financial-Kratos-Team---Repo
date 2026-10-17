@@ -24,7 +24,7 @@ export interface Installment {
   paidAmount?: number;
 }
 
-/** Tabla de amortización con cuota fija (sistema francés), cuotas quincenales. */
+/** Tabla de amortización con cuota fija (sistema francés), una cuota cada 15 días. */
 export function buildSchedule(amount: number, rateEA: number, installments: number, startAt: number): Installment[] {
   const i = periodRate(rateEA, INSTALLMENT_DAYS);
   const payment = i === 0 ? amount / installments : (amount * i) / (1 - Math.pow(1 + i, -installments));

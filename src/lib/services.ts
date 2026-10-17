@@ -1,5 +1,5 @@
 import "server-only";
-import { DAY_MS, EARLY_WITHDRAWAL_SHARE, INSTALLMENT_DAYS, investmentTermDays, Level, LEVELS, MIN_INVESTMENT, MIN_LOAN, MIN_PAYMENT, VAULT_BREB } from "./config";
+import { DAY_MS, EARLY_WITHDRAWAL_SHARE, INSTALLMENT_DAYS, investmentTermDays, Level, LEVELS, MIN_INSTALLMENTS, MIN_INVESTMENT, MIN_LOAN, MIN_PAYMENT, VAULT_BREB } from "./config";
 import { Applicant, DB, DisbursementState, Loan, Lot, Payout, Position, Tx, TxKind, newId, now } from "./db";
 import { accrue, buildSchedule, cop } from "./finance";
 import { assessWithML, mlHint } from "./riesgo-ml";
@@ -342,7 +342,9 @@ export function requestLoan(
   const amountError = validateMoney(amount, { min: MIN_LOAN, max: cfg.maxAmount });
   if (amountError) throw new BusinessError(`${amountError} para ${cfg.name}`);
   const days = installments * INSTALLMENT_DAYS;
-  if (!Number.isInteger(installments) || days < cfg.minDays || days > cfg.maxDays)
+  if (!Number.isInteger(installments) || installments < MIN_INSTALLMENTS)
+    throw new BusinessError(`El crédito es de mínimo ${MIN_INSTALLMENTS} cuotas (una cada ${INSTALLMENT_DAYS} días)`);
+  if (days < cfg.minDays || days > cfg.maxDays)
     throw new BusinessError(`El plazo para ${cfg.name} va de ${cfg.minDays} a ${cfg.maxDays} días`);
   // Cupo según capacidad de pago (el menor entre el techo del nivel y lo que alcanza a pagar en ese plazo)
   const limit = creditLimit(level, a.maxInstallment, installments);
@@ -350,7 +352,7 @@ export function requestLoan(
   // La cuota no puede superar su capacidad de pago calculada en el estudio
   const firstPayment = buildSchedule(amount, cfg.rateEA, installments, now(db))[0].payment;
   if (a.maxInstallment && firstPayment > a.maxInstallment)
-    throw new BusinessError(`La cuota (${cop(firstPayment)}) supera lo que puedes pagar por quincena (${cop(a.maxInstallment)}). Elige más cuotas o un monto menor.`);
+    throw new BusinessError(`La cuota (${cop(firstPayment)}) supera lo que puedes pagar cada ${INSTALLMENT_DAYS} días (${cop(a.maxInstallment)}). Elige más cuotas o un monto menor.`);
 
   // Llave Bre-B: verificada, vigente, del mismo solicitante, sin usar y con el titular confirmado
   const v = db.brebVerifications.find((x) => x.id === verificationId);

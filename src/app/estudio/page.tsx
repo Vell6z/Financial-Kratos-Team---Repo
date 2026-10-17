@@ -625,7 +625,7 @@ function Result({ study, onRetake }: { study: StudyView; onRetake: () => void })
           </div>
           {approved && (
             <div className="col-span-2 rounded-xl bg-brand-soft p-4 sm:col-span-1">
-              <div className="text-xs text-muted">Cuota máxima por quincena</div>
+              <div className="text-xs text-muted">Cuota máxima cada 15 días</div>
               <div className="text-xl font-semibold">{cop(study.maxInstallment)}</div>
               <div className="text-xs text-muted">Techo del nivel {cop(LEVELS[study.level!].maxAmount)}</div>
             </div>

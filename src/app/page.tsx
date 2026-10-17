@@ -24,7 +24,7 @@ const steps = [
   },
   {
     n: "04",
-    title: "Paga por quincenas y sube de nivel",
+    title: "Paga cada 15 días y sube de nivel",
     text: "Paga sus cuotas por Bre-B. Cada crédito pagado a tiempo construye historial y mejora sus condiciones.",
     tag: "Bre-B",
   },
@@ -172,7 +172,7 @@ export default async function Home() {
                     <li>
                       Plazo de {c.minDays} a {c.maxDays} días
                     </li>
-                    <li>Cuotas quincenales</li>
+                    <li>Cuotas cada 15 días (mínimo 2)</li>
                   </ul>
                 </div>
               );
@@ -250,7 +250,7 @@ function FlowCard() {
       {arrow("Bre-B · desembolso en COP", "#ffb259")}
       <div className={node}>
         <div className="text-xs text-white/60">Solicitante no bancarizado</div>
-        <div className="font-medium">Crédito con cuotas quincenales</div>
+        <div className="font-medium">Crédito con cuotas cada 15 días</div>
       </div>
       <div className="mt-4 rounded-lg bg-[#7edfc8]/10 px-3 py-2 text-xs text-[#7edfc8]">
         ↺ Las cuotas vuelven a la bóveda por Bre-B y el rendimiento al inversionista por Interledger.
