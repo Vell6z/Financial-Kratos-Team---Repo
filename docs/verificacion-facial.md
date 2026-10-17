@@ -1,5 +1,7 @@
 # Verificación facial en el registro
 
+> **Modo demo (por defecto):** todos pasan la verificación. La captura facial y su resultado (prueba de vida, parecidos) se guardan para la auditoría, pero no bloquean el registro ni dejan la cuenta en revisión. Para el comportamiento de producción descrito abajo, define `FACE_REVIEW=on`.
+
 > Documento de diseño. Define **qué** se construye y **por qué**, antes de escribir código.
 > Sigue los patrones que ya existen en el repo (`src/lib/breb.ts`, `src/lib/openpayments.ts`):
 > adaptador con un modo gratuito (`local`) por defecto y un IDV de pago detrás de variables de entorno.

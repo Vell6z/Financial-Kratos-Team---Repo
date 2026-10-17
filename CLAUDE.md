@@ -64,7 +64,7 @@ python3 ml/train_baseline.py   # entrena el modelo base y escribe ml/modelo/regr
   - `pdf-response.ts`: responde el PDF (con `?descargar` lo baja como archivo).
 - `demo-day-seed.ts` — **un día promedio** para el pitch: 4 inversionistas ficticios de otros países y 8 acreditados (al día, cuota por pagar hoy, mora de 9, 40 y 75 días, crédito pagado hoy, crédito desembolsado hoy, estudio recién hecho), con meses de historia. Usa los servicios reales moviendo el reloj (pools, comprobantes, mora y bitácora coherentes; los eventos toman la hora real equivalente). Se carga con "Cargar un día de demo" en `/boveda` y al reiniciar la demo. Correos `@demo.labodeguita.test`, sin datos reales.
 - `demo-seed.ts` — inversiones precargadas de la cuenta demo de inversionista (una sola vez, `db.demoSeeded`).
-- `demo-accounts.ts` — cuentas demo (inversionista, acreditado, operador). **Sus credenciales viven solo ahí: no repetirlas en chats, docs ni commits nuevos.**
+- `demo-accounts.ts` — cuentas demo (inversionista, acreditado, operador). Sus credenciales se definen solo ahí y se muestran a propósito en la página de inicio y en el login (`src/components/demo-credentials.tsx`) para que el jurado pueda probar cada rol. No repetirlas en otros documentos ni commits.
 
 **Pantallas (`src/app/`)** — cada ruta protegida tiene un `layout.tsx` con guardas de rol.
 - Públicas: `/` (landing), `/login`, `/registro` (asistente en 4 pasos).
@@ -141,7 +141,7 @@ Decisiones del área financiera (17-oct-2026), en `config.ts`:
 | Desembolso (payout) | Simulado: payout armado, no enviado |
 | Pago de cuotas | Simulador de banco en `/mi-credito` |
 | Referencias | Simuladas |
-| Verificación facial | Local en el navegador: suficiente para la demo (umbrales sin calibrar con personas reales) |
+| Verificación facial | Local en el navegador. En la demo **todos pasan** (`FACE_REVIEW` apagado): la captura se guarda para la auditoría, pero un parecido, una prueba de vida fallida o el registro sin cámara no bloquean. Con `FACE_REVIEW=on` (producción) esos casos quedan en revisión del operador |
 
 Wallets de prueba (en `.env`, no en el código):
 - Plataforma, firma las peticiones: `8c5cd013`.

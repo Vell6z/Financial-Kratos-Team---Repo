@@ -1,3 +1,4 @@
+import { faceReviewRequired } from "./faceverify";
 import { actorOf, audit } from "./audit";
 import "server-only";
 import { randomBytes, timingSafeEqual } from "crypto";
@@ -150,6 +151,8 @@ function userForToken(db: DB, token: string | undefined) {
  * verificada. Con la verificación facial en revisión del operador, la cuenta sirve pero no mueve plata.
  */
 export function requireVerifiedIdentity(user: User, action: string) {
+  // En la demo (FACE_REVIEW apagado) una verificación en revisión no frena; una rechazada nunca llega aquí (no inicia sesión)
+  if (!faceReviewRequired() && user.faceVerification === "pendiente") return;
   if (user.faceVerification !== "aprobada")
     throw new BusinessError(`Tu verificación de identidad está en revisión. Cuando el equipo la apruebe podrás ${action}.`);
 }

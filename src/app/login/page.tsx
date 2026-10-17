@@ -1,3 +1,4 @@
+import { DemoCredentials } from "@/components/demo-credentials";
 import { Suspense } from "react";
 import { AuthForm } from "./auth-form";
 
@@ -19,9 +20,12 @@ export default function LoginPage() {
           </ul>
         </div>
       </section>
-      <Suspense>
-        <AuthForm />
-      </Suspense>
+      <div className="space-y-4 self-center">
+        <Suspense>
+          <AuthForm />
+        </Suspense>
+        <DemoCredentials className="mx-auto max-w-md" />
+      </div>
     </div>
   );
 }

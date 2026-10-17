@@ -1,3 +1,4 @@
+import { faceReviewRequired } from "./faceverify";
 import "server-only";
 import { DAY_MS, DELINQUENCY, LEVELS } from "./config";
 import { DB, User, now } from "./db";
@@ -22,7 +23,7 @@ export function notificationsFor(db: DB, user: User): Notification[] {
   const t = now(db);
   const list: Notification[] = [];
 
-  if (user.faceVerification === "pendiente")
+  if (user.faceVerification === "pendiente" && faceReviewRequired())
     list.push({
       id: "face",
       tone: "info",

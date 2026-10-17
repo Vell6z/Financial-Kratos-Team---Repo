@@ -1,3 +1,4 @@
+import { faceReviewRequired } from "@/lib/faceverify";
 import { handle } from "@/lib/api";
 import { verifyAuditChain } from "@/lib/audit";
 import { requireAdmin, requireUser } from "@/lib/auth";
@@ -124,7 +125,7 @@ export async function GET() {
           .map((l) => ({ loanId: l.id, name: l.name, level: l.level, chargedOffAt: l.chargedOffAt ?? null, ...l.creditReport! })),
         // Cola de revisión de verificaciones faciales en zona gris (sin el descriptor biométrico)
         faceReviews: db.users
-          .filter((u) => u.faceVerification === "pendiente" && u.faceCheck)
+          .filter((u) => faceReviewRequired() && u.faceVerification === "pendiente" && u.faceCheck)
           .map((u) => ({
             id: u.id,
             name: u.name,

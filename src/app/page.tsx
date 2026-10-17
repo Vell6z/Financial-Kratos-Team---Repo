@@ -1,3 +1,4 @@
+import { DemoCredentials } from "@/components/demo-credentials";
 import Link from "next/link";
 import { currentUser } from "@/lib/auth";
 import { APP_NAME, fmtRate, LEVEL_IDS, LEVELS } from "@/lib/config";
@@ -74,6 +75,11 @@ export default async function Home() {
           </div>
           <FlowCard />
         </div>
+      </section>
+
+      {/* Cuentas de prueba para el jurado y los mentores */}
+      <section className="mx-auto max-w-6xl px-4 pt-12">
+        <DemoCredentials />
       </section>
 
       {/* Problema */}

@@ -16,7 +16,7 @@ export interface FaceCaptureResult {
   descriptor: number[];
   /** Serie de frames del reto: ángulo de giro y si había rostro. */
   frames: { yaw: number; faceDetected: boolean }[];
-  /** No tiene cámara: la cuenta queda en revisión del operador */
+  /** No tiene cámara: en la demo la cuenta pasa igual; con FACE_REVIEW=on queda en revisión del operador */
   skipped?: boolean;
 }
 
@@ -198,7 +198,7 @@ export function FaceCapture({
         <div>
           <div className="text-sm font-medium">Sin verificación facial</div>
           <div className="text-xs text-muted">
-            Nuestro equipo verificará tu identidad por otro medio. Mientras tanto podrás usar la app, pero no pedir crédito ni invertir.
+            En esta demo puedes usar la app completa sin la verificación facial. En producción, nuestro equipo verificaría tu identidad por otro medio antes de dejarte pedir crédito o invertir.
           </div>
         </div>
         <Button type="button" variant="ghost" onClick={retry}>

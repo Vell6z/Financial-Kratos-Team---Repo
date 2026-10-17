@@ -172,6 +172,13 @@ export function getFaceVerifier(): FaceVerifier {
 // Cifrado del descriptor en reposo (dato biométrico sensible)
 // ----------------------------------------------------------------------
 
+/**
+ * ¿Hay que revisar la identidad antes de dejar mover dinero? Solo con FACE_REVIEW=on (producción).
+ * En la demo (por defecto) todos pasan: la captura y su resultado se guardan igual para la auditoría,
+ * pero una prueba de vida fallida, un parecido o el registro sin cámara no bloquean la cuenta.
+ */
+export const faceReviewRequired = () => process.env.FACE_REVIEW?.trim().toLowerCase() === "on";
+
 /** Clave de 32 bytes derivada de FACE_DESCRIPTOR_SECRET (o una por defecto solo para local/demo). */
 function descriptorKey() {
   const secret = process.env.FACE_DESCRIPTOR_SECRET || "kratos-local-face-descriptor-key";

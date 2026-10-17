@@ -11,6 +11,7 @@ import {
   isValidDescriptor,
   type KnownFace,
   type LivenessFrame,
+  faceReviewRequired,
 } from "@/lib/faceverify";
 import { isInterledgerEnabled, normalizeWallet, walletExists } from "@/lib/openpayments";
 import { EMPTY_REGISTRATION, type RegistrationData, validateIdFile } from "@/lib/registration";
@@ -40,15 +41,18 @@ export async function POST(request: Request) {
     // --- Verificación facial (ver docs/verificacion-facial.md) ---
     // 1) liveness (giro de cabeza) y descriptor llegan del cliente; se validan aquí.
     //    Sin cámara (faceSkipped): la cuenta se crea en revisión del operador, sin dato biométrico.
+    //    En la demo (FACE_REVIEW apagado) todos pasan: nada de esto bloquea el registro ni deja la cuenta en revisión.
+    const strict = faceReviewRequired();
     const verifier = getFaceVerifier();
-    const skipped = form.get("faceSkipped") === "1";
     const descriptor = parseJson<number[]>(form.get("faceDescriptor"));
+    // Sin un descriptor válido, en la demo se trata como "sin cámara" en vez de bloquear
+    const skipped = form.get("faceSkipped") === "1" || (!strict && !isValidDescriptor(descriptor));
     const frames = parseJson<LivenessFrame[]>(form.get("faceFrames")) ?? [];
     let liveness: ReturnType<typeof verifier.checkLiveness> | null = null;
     if (!skipped) {
       if (!isValidDescriptor(descriptor)) throw new BusinessError("Completa la verificación facial antes de crear tu cuenta.");
       liveness = verifier.checkLiveness({ frames });
-      if (!liveness.ok) throw new BusinessError(liveness.message ?? "No pudimos confirmar que eres una persona real. Repite la verificación facial.");
+      if (!liveness.ok && strict) throw new BusinessError(liveness.message ?? "No pudimos confirmar que eres una persona real. Repite la verificación facial.");
     }
 
     // Las copias del documento van a almacenamiento privado (bucket de Supabase o data/uploads): no quedan expuestas en la web
@@ -72,7 +76,7 @@ export async function POST(request: Request) {
         if (skipped || !descriptor || !liveness) {
           // Sin cámara: el operador verifica la identidad por otro medio (videollamada, presencial…)
           const check: FaceCheck = { mode: "sin_camara", liveness: false, yawRange: 0, documentDistance: -1, dedupDistance: null, challenge: "none", reviewReason: "sin_camara", at: Date.now() };
-          return register(db, data, { id, wallet, documents, face: { verification: "pendiente", check } });
+          return register(db, data, { id, wallet, documents, face: { verification: strict ? "pendiente" : "aprobada", check } });
         }
 
         // 2) Deduplicación 1:N contra las caras ya registradas (descriptores descifrados en memoria).
@@ -96,7 +100,8 @@ export async function POST(request: Request) {
           reviewReason: duplicate ? (duplicate.certain ? "duplicado_probable" : "parecido") : undefined,
           at: Date.now(),
         };
-        const verification = duplicate ? "pendiente" : "aprobada";
+        // En la demo pasa siempre; el parecido queda anotado en faceCheck para la auditoría
+        const verification = strict && duplicate ? "pendiente" : "aprobada";
 
         return register(db, data, {
           id,
