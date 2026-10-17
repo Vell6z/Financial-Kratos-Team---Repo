@@ -20,6 +20,7 @@ Idioma: la app, el código (comentarios, nombres de negocio) y la documentación
 
 ```bash
 npm run dev            # servidor de desarrollo en :3000 (en .claude/launch.json como "kratos-dev")
+npm run dev:https      # igual, con https y abierto a la red local: para probar la cámara desde el celular
 npm run build          # compila y revisa tipos: debe pasar antes de cualquier commit
 npx eslint .           # lint
 npm run ml:dataset     # regenera ml/dataset/creditos_sinteticos.csv (usa computeStudy de la app)
@@ -117,7 +118,8 @@ python3 ml/train_baseline.py   # entrena el modelo base y escribe ml/modelo/regr
 | Inversiones de la cuenta demo | Precargadas (marcadas como demostración, sin Interledger) |
 | Desembolso (payout) | Simulado: payout armado, no enviado |
 | Pago de cuotas | Simulador de banco en `/mi-credito` |
-| Referencias, verificación facial | Simuladas |
+| Referencias | Simuladas |
+| Verificación facial | Local en el navegador: suficiente para la demo (umbrales sin calibrar con personas reales) |
 
 Wallets de prueba (en `.env`, no en el código):
 - Plataforma, firma las peticiones: `8c5cd013`.
@@ -167,7 +169,8 @@ Wallets de prueba (en `.env`, no en el código):
     JITI_ALIAS='{"server-only":"<repo>/node_modules/next/dist/compiled/server-only/empty.js"}' node_modules/.bin/jiti archivo.ts
     ```
 - **Pruebas por API:** registrar un acreditado con `POST /api/auth/register` (multipart) y luego enviar el estudio con `POST /api/study`. Los perfiles de prueba del modelo están en `docs/modelo-de-riesgo.md`.
-- **Cámara:** en el navegador integrado de la app de Claude la cámara está bloqueada. Para probar el escáner QR en vivo, usar Chrome normal en `http://localhost:3000`; "Subir foto" funciona en cualquier lado. En el celular, la cámara en vivo exige https.
+- **Cámara:** en el navegador integrado de la app de Claude la cámara está bloqueada. Para probar el escáner QR en vivo, usar Chrome normal en `http://localhost:3000`; "Subir foto" funciona en cualquier lado.
+- **Celular:** `npm run dev:https` y abrir `https://<IP del computador>:3000` (misma red wifi). El certificado de mkcert no es de confianza en el celular: aceptar la advertencia ("Avanzado → Continuar"). Los certificados quedan en `certificates/` (ignorado por git).
 - **Llaves del sandbox de Wompi:** `@elias123`, `1020304050`, `3001234567`, `ecolon@wompi.com`, `B00012345`. En producción, esas llaves pueden ser de personas reales.
 - **Shell:** la del equipo es `fish`. Para comandos con heredocs o bucles, usar scripts de bash.
 
@@ -182,5 +185,5 @@ Wallets de prueba (en `.env`, no en el código):
 **Se pueden hacer ya**
 - Prueba de punta a punta de una inversión y un retiro reales: aprobar en la wallet `usdtroly` y autorizar la bóveda en `/boveda`.
 - Robustez de `db.json` (no arrancar vacía si el archivo no se puede leer).
-- Referencias y verificación facial reales.
-- https en desarrollo para la cámara del celular.
+- Referencias reales (hoy la confirmación es simulada).
+- Datos de demo del acreditado (estudio hecho, un crédito activo y uno pagado).
